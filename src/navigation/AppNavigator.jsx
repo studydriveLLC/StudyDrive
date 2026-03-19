@@ -8,7 +8,7 @@ import { useAppTheme } from '../theme/theme';
 
 import LoginPage from '../screens/auth/LoginPage';
 import RegisterPage from '../screens/auth/RegisterPage';
-import FeedScreen from '../screens/home/FeedScreen';
+import MainTabNavigator from './MainTabNavigator';
 
 import ErrorToast from '../components/ui/ErrorToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
@@ -52,8 +52,8 @@ export default function AppNavigator() {
       <Stack.Navigator 
         screenOptions={{ 
           headerShown: false,
-          animation: 'fade', // Remplacement par le fade-in fluide
-          gestureEnabled: false, // On désactive le glissement car ce n'est plus un slide
+          animation: 'fade',
+          gestureEnabled: false, 
         }}
       >
         {!isAuthenticated ? (
@@ -62,7 +62,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Register" component={RegisterPage} />
           </>
         ) : (
-          <Stack.Screen name="Feed" component={FeedScreen} />
+          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         )}
       </Stack.Navigator>
       
