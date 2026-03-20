@@ -9,7 +9,9 @@ import { useAppTheme } from '../theme/theme';
 import LandingPage from '../screens/auth/LandingPage';
 import LoginPage from '../screens/auth/LoginPage';
 import RegisterPage from '../screens/auth/RegisterPage';
-import MainDrawerNavigator from './MainDrawerNavigator'; 
+
+import MainTabNavigator from './MainTabNavigator'; 
+import MenuScreen from '../screens/profile/MenuScreen';
 
 import ErrorToast from '../components/ui/ErrorToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
@@ -64,7 +66,17 @@ export default function AppNavigator() {
             <Stack.Screen name="Login" component={LoginPage} />
           </>
         ) : (
-          <Stack.Screen name="MainDrawer" component={MainDrawerNavigator} />
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen 
+              name="Menu" 
+              component={MenuScreen} 
+              options={{ 
+                animation: 'slide_from_right',
+                gestureEnabled: true
+              }} 
+            />
+          </>
         )}
       </Stack.Navigator>
       
@@ -74,12 +86,6 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
-  mainWrapper: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center',
-  }
+  mainWrapper: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });

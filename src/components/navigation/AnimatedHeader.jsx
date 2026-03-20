@@ -3,8 +3,7 @@ import { View, StyleSheet, TextInput, Pressable, DeviceEventEmitter, Text } from
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Search, Bell, Menu, X } from 'lucide-react-native';
-import { useDrawerStatus } from '@react-navigation/drawer';
+import { Search, Bell, Menu } from 'lucide-react-native';
 import { useAppTheme } from '../../theme/theme';
 import { useHeaderAnimations } from './useHeaderAnimations';
 import AnimatedSearchPlaceholder from './AnimatedSearchPlaceholder';
@@ -15,9 +14,6 @@ export default function AnimatedHeader({ scrollY, navigation }) {
   
   const [searchValue, setSearchValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-
-  // Détection en temps réel de l'état du menu latéral
-  const isDrawerOpen = useDrawerStatus() === 'open';
 
   const animations = useHeaderAnimations(scrollY, insets);
 
@@ -57,15 +53,11 @@ export default function AnimatedHeader({ scrollY, navigation }) {
 
         <View style={styles.rightSection}>
           <Pressable 
-            onPress={() => isDrawerOpen ? navigation.closeDrawer() : navigation.openDrawer()} 
+            onPress={() => navigation.navigate('Menu')} 
             style={styles.iconButton} 
             hitSlop={10}
           >
-            {isDrawerOpen ? (
-              <X color={theme.colors.surface} size={28} />
-            ) : (
-              <Menu color={theme.colors.surface} size={28} />
-            )}
+            <Menu color={theme.colors.surface} size={28} />
           </Pressable>
         </View>
       </View>
@@ -92,88 +84,19 @@ export default function AnimatedHeader({ scrollY, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    overflow: 'hidden',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-  leftSection: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    position: 'absolute',
-    left: 0,
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  bellContainerAnimated: {
-    position: 'absolute',
-    left: 0,
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-  },
-  centerSection: {
-    flex: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniSearchContainer: {
-    position: 'absolute',
-  },
-  rightSection: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  iconButton: {
-    padding: 4,
-  },
-  bottomRow: {
-    height: 70,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-    zIndex: 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    height: '100%',
-    zIndex: 1,
-  },
+  container: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, overflow: 'hidden', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  leftSection: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  logoContainer: { position: 'absolute', left: 0 },
+  logoText: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  bellContainerAnimated: { position: 'absolute', left: 0 },
+  badge: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
+  centerSection: { flex: 2, alignItems: 'center', justifyContent: 'center' },
+  miniSearchContainer: { position: 'absolute' },
+  rightSection: { flex: 1, alignItems: 'flex-end' },
+  iconButton: { padding: 4 },
+  bottomRow: { height: 70, paddingHorizontal: 16, justifyContent: 'center', position: 'absolute', bottom: 0, left: 0, right: 0 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', height: 44, borderRadius: 12, paddingHorizontal: 12 },
+  searchIcon: { marginRight: 8, zIndex: 2 },
+  searchInput: { flex: 1, fontSize: 15, height: '100%', zIndex: 1 },
 });

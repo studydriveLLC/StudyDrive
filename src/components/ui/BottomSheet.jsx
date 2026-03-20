@@ -32,6 +32,9 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
       opacity.value = withTiming(1, { duration: 300 });
       translateY.value = withTiming(0, slideConfig);
     } else {
+      // AJOUT : On force le clavier à se fermer dès que le tiroir reçoit l'ordre de disparaître
+      Keyboard.dismiss(); 
+      
       opacity.value = withTiming(0, { duration: 200 });
       translateY.value = withTiming(SCREEN_HEIGHT, slideConfig, (isFinished) => {
         if (isFinished) runOnJS(onClose)();
@@ -59,6 +62,9 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
     .onUpdate((e) => { if (e.translationY > 0) translateY.value = e.translationY; })
     .onEnd((e) => {
       if (e.translationY > 150 || e.velocityY > 500) {
+        // AJOUT : runOnJS permet d'exécuter la fonction native Keyboard.dismiss depuis le thread UI de Reanimated
+        runOnJS(Keyboard.dismiss)(); 
+        
         opacity.value = withTiming(0, { duration: 200 });
         translateY.value = withTiming(SCREEN_HEIGHT, slideConfig, (done) => { if (done) runOnJS(onClose)(); });
       } else { translateY.value = withTiming(0, slideConfig); }
@@ -70,13 +76,10 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
   }));
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { translateY: -keyboardHeight.value }
-    ],
+    transform: [{ translateY: translateY.value }],
+    paddingBottom: keyboardHeight.value,
   }));
 
-  // C'est ici que la magie opère : on annule le padding TabBar quand le clavier est là
   const footerAnimatedStyle = useAnimatedStyle(() => {
     const isKeyboardOpen = keyboardHeight.value > 0;
     return {
@@ -96,11 +99,7 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
         <Animated.View 
           style={[
             styles.sheetContainer, 
-            { 
-              height: SHEET_HEIGHT, 
-              backgroundColor: theme.colors.background,
-              bottom: 0 
-            }, 
+            { height: SHEET_HEIGHT, backgroundColor: theme.colors.background, bottom: 0 }, 
             sheetStyle
           ]}
         >
@@ -112,7 +111,7 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
           </View>
           
           <ScrollView 
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             contentContainerStyle={styles.scrollContent}
             bounces={true}
             keyboardShouldPersistTaps="handled"
@@ -133,27 +132,10 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
 
 const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1 },
-  sheetContainer: { 
-    position: 'absolute', 
-    left: 0, 
-    right: 0, 
-    borderTopLeftRadius: 30, 
-    borderTopRightRadius: 30, 
-    zIndex: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: -3 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 10, 
-    elevation: 10,
-    overflow: 'hidden' 
-  },
+  sheetContainer: { position: 'absolute', left: 0, right: 0, borderTopLeftRadius: 30, borderTopRightRadius: 30, zIndex: 2, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, overflow: 'hidden' },
   header: { height: 40, alignItems: 'center', justifyContent: 'center' },
   dragHandle: { width: 40, height: 5, borderRadius: 3, marginTop: 10 },
   closeButton: { position: 'absolute', right: 20, top: 10 },
   scrollContent: { paddingBottom: 20 },
-  footerContainer: { 
-    borderTopWidth: 1, 
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    backgroundColor: 'transparent'
-  }
+  footerContainer: { borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', backgroundColor: 'transparent' }
 });
