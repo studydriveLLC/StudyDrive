@@ -42,5 +42,11 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "babel-preset-expo": "~54.0.0"
+  },
+  "overrides": {
+    "react-native-worklets-core": "0.5.1"
+  },
+  "resolutions": {
+    "react-native-worklets-core": "0.5.1"
   }
 }
