@@ -10,6 +10,22 @@ import apiClient from '../../api/client';
 const CATEGORIES = ['Microbiologie', 'Biochimie', 'Qualité', 'Laboratoire'];
 const LEVELS = ['BTS 1', 'BTS 2', 'Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
 
+const getMimeType = (fileName, fallbackMime) => {
+  if (fallbackMime && fallbackMime !== 'application/octet-stream') return fallbackMime;
+  const ext = fileName.split('.').pop().toLowerCase();
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'doc': return 'application/msword';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls': return 'application/vnd.ms-excel';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    default: return 'application/octet-stream';
+  }
+};
+
 export default function UploadResourceModal({ visible, onClose }) {
   const theme = useAppTheme();
   
@@ -30,16 +46,28 @@ export default function UploadResourceModal({ visible, onClose }) {
     
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        type: [
+          'application/pdf', 
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'image/jpeg',
+          'image/png'
+        ],
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const picked = result.assets[0];
+        
+        if (picked.size > 15 * 1024 * 1024) {
+          setUploadError("Le fichier depasse la limite de 15 MB.");
+          return;
+        }
+
         const sizeInMB = (picked.size / (1024 * 1024)).toFixed(2);
         
         let fileUri = picked.uri;
-        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
           fileUri = `file://${fileUri}`;
         }
 
@@ -47,11 +75,11 @@ export default function UploadResourceModal({ visible, onClose }) {
           name: picked.name,
           uri: fileUri,
           size: sizeInMB,
-          mimeType: picked.mimeType || 'application/octet-stream'
+          mimeType: getMimeType(picked.name, picked.mimeType)
         });
       }
     } catch (error) {
-      console.log("Erreur lors de la sélection du fichier :", error);
+      console.log("Erreur lors de la selection du fichier :", error);
     }
   };
 
@@ -81,7 +109,6 @@ export default function UploadResourceModal({ visible, onClose }) {
           'Accept': 'application/json',
         },
         timeout: 120000, 
-        transformRequest: (data) => data,
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -103,11 +130,11 @@ export default function UploadResourceModal({ visible, onClose }) {
       }, 1500);
 
     } catch (error) {
-      console.log("Détail de l'erreur réseau :", error.message, error.response?.data);
+      console.log("Detail de l'erreur reseau :", error.message, error.response?.data);
       setIsUploading(false);
       setIsUploadSuccess(false);
       uploadProgress.value = 0;
-      setUploadError("Le délai d'envoi a expiré ou le fichier est trop lourd.");
+      setUploadError("Le delai d'envoi a expire ou le fichier a ete rejete.");
     }
   };
 
@@ -148,8 +175,8 @@ export default function UploadResourceModal({ visible, onClose }) {
             <View style={[styles.iconCircle, { backgroundColor: theme.colors.primaryLight }]}>
               <FileUp color={theme.colors.primaryDark} size={32} />
             </View>
-            <Text style={[styles.uploadText, { color: theme.colors.text }]}>Appuyez pour sélectionner</Text>
-            <Text style={[styles.uploadSub, { color: theme.colors.textMuted }]}>PDF, DOCX, XLSX (Max 15 MB)</Text>
+            <Text style={[styles.uploadText, { color: theme.colors.text }]}>Appuyez pour selectionner</Text>
+            <Text style={[styles.uploadSub, { color: theme.colors.textMuted }]}>PDF, DOCX, XLSX, JPG, PNG (Max 15 MB)</Text>
           </Pressable>
         ) : (
           <View style={[styles.fileCard, { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary }]}>
@@ -175,7 +202,7 @@ export default function UploadResourceModal({ visible, onClose }) {
           <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Titre du document</Text>
           <TextInput
             style={[styles.textInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="Ex: Fiches de révision Qualité..."
+            placeholder="Ex: Fiches de revision..."
             placeholderTextColor={theme.colors.textDisabled}
             value={title}
             onChangeText={setTitle}
@@ -184,7 +211,7 @@ export default function UploadResourceModal({ visible, onClose }) {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Niveau d'étude</Text>
+          <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Niveau d'etude</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
             {LEVELS.map((lvl) => (
               <Pressable 
@@ -204,7 +231,7 @@ export default function UploadResourceModal({ visible, onClose }) {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Catégorie</Text>
+          <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Categorie</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
             {CATEGORIES.map((cat) => (
               <Pressable 
