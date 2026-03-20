@@ -1,50 +1,62 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import PostHeader from './PostHeader';
+import PostContent from './PostContent';
 import PostActions from './PostActions';
+import CommentsModal from './CommentsModal';
 import { useAppTheme } from '../../theme/theme';
 
 export default function PostCard({ post }) {
   const theme = useAppTheme();
+  
+  const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
   const handleReadMore = () => {
     console.log("Ouvrir la modale LiquidGlass pour lire toute la description");
-    // TODO: Connecter à la LiquidModal de description
+  };
+
+  const handleMediaPress = () => {
+    console.log("Ouvrir le visualiseur de media plein ecran");
   };
 
   const handleCommentPress = () => {
-    console.log("Ouvrir la modale de commentaires glissante vers le haut");
-    // TODO: Connecter à la modale de commentaires
+    setIsCommentsVisible(true);
   };
 
   const handleSharePress = () => {
-    console.log("Ouvrir la modale de partage (App ou Ailleurs)");
-    // TODO: Connecter à la modale de partage
+    console.log("Ouvrir la modale de partage");
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-      
-      <PostHeader 
-        author={post.author} 
-        date={post.date} 
-        description={post.description} 
-        onReadMore={handleReadMore}
+    <>
+      <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <PostHeader 
+          author={post.author} 
+          date={post.date} 
+          description={post.description} 
+          onReadMore={handleReadMore}
+        />
+
+        <PostContent 
+          media={post.media} 
+          onPress={handleMediaPress} 
+        />
+
+        <PostActions 
+          likesCount={post.likes}
+          commentsCount={post.comments}
+          sharesCount={post.shares}
+          isLikedByMe={post.isLikedByMe}
+          onCommentPress={handleCommentPress}
+          onSharePress={handleSharePress}
+        />
+      </View>
+
+      <CommentsModal 
+        visible={isCommentsVisible} 
+        onClose={() => setIsCommentsVisible(false)} 
       />
-
-      {/* Zone réservée au contenu média (Image/Vidéo/Texte seul) que nous ferons plus tard */}
-      {/* <PostContent media={post.media} /> */}
-
-      <PostActions 
-        likesCount={post.likes}
-        commentsCount={post.comments}
-        sharesCount={post.shares}
-        isLikedByMe={post.isLikedByMe}
-        onCommentPress={handleCommentPress}
-        onSharePress={handleSharePress}
-      />
-
-    </View>
+    </>
   );
 }
 

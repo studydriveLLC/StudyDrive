@@ -16,6 +16,7 @@ const MOCK_POSTS = [
     comments: 342,
     shares: 89,
     isLikedByMe: false,
+    media: [{ type: 'image', url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80' }],
   },
   {
     id: '2',
@@ -26,6 +27,7 @@ const MOCK_POSTS = [
     comments: 45,
     shares: 12,
     isLikedByMe: true,
+    media: [{ type: 'video', url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80', views: 45000 }],
   },
   {
     id: '3',
