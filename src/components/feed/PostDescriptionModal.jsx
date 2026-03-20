@@ -1,97 +1,91 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
-import { X } from 'lucide-react-native';
-import LiquidModal from '../ui/LiquidModal';
+import { View, Text, StyleSheet, Image } from 'react-native';
+import BottomSheet from '../ui/BottomSheet';
+import ExpandableText from '../ui/ExpandableText';
 import { useAppTheme } from '../../theme/theme';
 
 export default function PostDescriptionModal({ visible, onClose, author, date, description }) {
   const theme = useAppTheme();
 
+  // Gatekeeper de sécurité
   if (!author) return null;
 
   return (
-    <LiquidModal visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        <View style={styles.authorInfo}>
-          {author.avatar ? (
-            <Image source={{ uri: author.avatar }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryLight }]}>
-              <Text style={{ color: theme.colors.surface, fontWeight: '700' }}>
-                {author.pseudo.substring(0, 1).toUpperCase()}
-              </Text>
+    // Le BottomSheet contient déjà un ScrollView coordonné
+    <BottomSheet isVisible={visible} onClose={onClose}>
+      <View style={styles.container}>
+        
+        {/* Header avec les infos de l'auteur - Inchangé */}
+        <View style={styles.header}>
+          <View style={styles.authorInfo}>
+            {author.avatar ? (
+              <Image source={{ uri: author.avatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryLight }]}>
+                <Text style={{ color: theme.colors.primaryDark, fontWeight: '700', fontSize: 16 }}>
+                  {author.pseudo[0].toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.metaData}>
+              <Text style={[styles.pseudo, { color: theme.colors.text }]}>{author.pseudo}</Text>
+              <Text style={[styles.date, { color: theme.colors.textMuted }]}>{date}</Text>
             </View>
-          )}
-          <View style={styles.metaData}>
-            <Text style={[styles.pseudo, { color: theme.colors.text }]}>{author.pseudo}</Text>
-            <Text style={[styles.date, { color: theme.colors.textMuted }]}>{date}</Text>
           </View>
         </View>
-        
-        <Pressable onPress={onClose} style={styles.closeButton}>
-          <X color={theme.colors.textMuted} size={24} />
-        </Pressable>
-      </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Text style={[styles.fullText, { color: theme.colors.text }]}>
-          {description}
-        </Text>
-      </ScrollView>
-    </LiquidModal>
+        {/* Moteur d'intelligence textuelle modulaire avec de gros paliers pour la description */}
+        <ExpandableText 
+          text={description} 
+          tiers={[15, 60, 240]} // Paliers: 15l -> 60l -> 240l -> Scrolable
+          style={styles.descriptionText}
+        />
+
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 20, // Air en bas pour ne pas coller au bord
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    paddingTop: 10,
   },
   authorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
   metaData: {
-    marginLeft: 12,
+    marginLeft: 14,
   },
   pseudo: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
   },
   date: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
+    marginTop: 3,
   },
-  closeButton: {
-    padding: 4,
-    borderRadius: 20,
-  },
-  scrollContainer: {
-    maxHeight: 400, 
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  fullText: {
+  descriptionText: {
     fontSize: 16,
-    lineHeight: 26,
+    lineHeight: 28, // Interlignage Senior pour la lecture longue
   },
 });

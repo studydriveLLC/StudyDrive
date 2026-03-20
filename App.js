@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { store } from './src/store/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useAppTheme } from './src/theme/theme';
+import { navigationRef } from './src/navigation/NavigationService';
 
 export default function App() {
   const scheme = useColorScheme();
@@ -33,7 +34,7 @@ export default function App() {
     <Provider store={store}>
       <SafeAreaProvider>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} translucent={true} />
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer theme={navigationTheme} ref={navigationRef}>
           <AppNavigator />
         </NavigationContainer>
       </SafeAreaProvider>

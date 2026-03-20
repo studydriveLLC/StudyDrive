@@ -1,67 +1,65 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Repeat, Link as LinkIcon, X } from 'lucide-react-native';
-import LiquidModal from '../ui/LiquidModal';
+import { Repeat, Link as LinkIcon } from 'lucide-react-native';
+import BottomSheet from '../ui/BottomSheet';
 import { useAppTheme } from '../../theme/theme';
 
 export default function ShareModal({ visible, onClose, onShareInternal, onShareExternal }) {
   const theme = useAppTheme();
 
   return (
-    <LiquidModal visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Partager</Text>
-        <Pressable onPress={onClose} style={styles.closeButton}>
-          <X color={theme.colors.textMuted} size={24} />
+    <BottomSheet isVisible={visible} onClose={onClose}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Partager</Text>
+        </View>
+
+        <Pressable 
+          style={[styles.optionRow, { borderBottomColor: theme.colors.divider, borderBottomWidth: 1 }]} 
+          onPress={onShareInternal}
+        >
+          <View style={[styles.iconBox, { backgroundColor: theme.colors.primaryLight }]}>
+            <Repeat color={theme.colors.primaryDark} size={20} />
+          </View>
+          <View style={styles.optionTextContainer}>
+            <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Republier sur StudyDrive</Text>
+            <Text style={[styles.optionSub, { color: theme.colors.textMuted }]}>
+              Partager sur votre fil d'actualité
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable 
+          style={styles.optionRow} 
+          onPress={onShareExternal}
+        >
+          <View style={[styles.iconBox, { backgroundColor: theme.colors.primaryLight }]}>
+            <LinkIcon color={theme.colors.primaryDark} size={20} />
+          </View>
+          <View style={styles.optionTextContainer}>
+            <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Copier le lien</Text>
+            <Text style={[styles.optionSub, { color: theme.colors.textMuted }]}>
+              Partager en dehors de l'application
+            </Text>
+          </View>
         </Pressable>
       </View>
-
-      <Pressable 
-        style={[styles.optionRow, { borderBottomColor: theme.colors.divider, borderBottomWidth: 1 }]} 
-        onPress={onShareInternal}
-      >
-        <View style={[styles.iconBox, { backgroundColor: theme.colors.primaryLight }]}>
-          <Repeat color={theme.colors.primaryDark} size={20} />
-        </View>
-        <View style={styles.optionTextContainer}>
-          <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Republier sur StudyDrive</Text>
-          <Text style={[styles.optionSub, { color: theme.colors.textMuted }]}>
-            Partager sur votre fil d'actualite
-          </Text>
-        </View>
-      </Pressable>
-
-      <Pressable 
-        style={styles.optionRow} 
-        onPress={onShareExternal}
-      >
-        <View style={[styles.iconBox, { backgroundColor: theme.colors.primaryLight }]}>
-          <LinkIcon color={theme.colors.primaryDark} size={20} />
-        </View>
-        <View style={styles.optionTextContainer}>
-          <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Copier le lien</Text>
-          <Text style={[styles.optionSub, { color: theme.colors.textMuted }]}>
-            Partager en dehors de l'application
-          </Text>
-        </View>
-      </Pressable>
-    </LiquidModal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginBottom: 20,
     alignItems: 'center',
-    marginBottom: 24,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-  },
-  closeButton: {
-    padding: 4,
   },
   optionRow: {
     flexDirection: 'row',

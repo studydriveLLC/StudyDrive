@@ -9,7 +9,7 @@ import { useAppTheme } from '../theme/theme';
 import LandingPage from '../screens/auth/LandingPage';
 import LoginPage from '../screens/auth/LoginPage';
 import RegisterPage from '../screens/auth/RegisterPage';
-import MainTabNavigator from './MainTabNavigator';
+import MainDrawerNavigator from './MainDrawerNavigator'; 
 
 import ErrorToast from '../components/ui/ErrorToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
@@ -64,7 +64,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Login" component={LoginPage} />
           </>
         ) : (
-          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+          <Stack.Screen name="MainDrawer" component={MainDrawerNavigator} />
         )}
       </Stack.Navigator>
       

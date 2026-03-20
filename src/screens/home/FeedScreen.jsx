@@ -4,6 +4,10 @@ import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedHeader from '../../components/navigation/AnimatedHeader';
 import PostCard from '../../components/feed/PostCard';
+import CommentsModal from '../../components/feed/CommentsModal';
+import PostDescriptionModal from '../../components/feed/PostDescriptionModal';
+import ShareModal from '../../components/feed/ShareModal';
+import PostOptionsModal from '../../components/feed/PostOptionsModal';
 import { useAppTheme } from '../../theme/theme';
 
 const MOCK_POSTS = [
@@ -49,6 +53,12 @@ export default function FeedScreen({ navigation }) {
   const listRef = useRef(null);
   const savedScrollPosition = useRef(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // État des modales
+  const [activeCommentPost, setActiveCommentPost] = useState(null);
+  const [activeDescPost, setActiveDescPost] = useState(null);
+  const [activeSharePost, setActiveSharePost] = useState(null);
+  const [activeOptionsPost, setActiveOptionsPost] = useState(null);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -99,9 +109,48 @@ export default function FeedScreen({ navigation }) {
         contentContainerStyle={{
           paddingTop: 140 + insets.top, 
           paddingBottom: 100, 
-          paddingHorizontal: 16,
         }}
-        renderItem={({ item }) => <PostCard post={item} />}
+        renderItem={({ item }) => (
+          <PostCard 
+            post={item} 
+            onOpenComments={setActiveCommentPost}
+            onOpenDescription={setActiveDescPost}
+            onOpenShare={setActiveSharePost}
+            onOpenOptions={setActiveOptionsPost}
+          />
+        )}
+      />
+
+      {/* Rendu des modales à la racine de l'écran */}
+      <CommentsModal 
+        visible={!!activeCommentPost} 
+        onClose={() => setActiveCommentPost(null)} 
+      />
+      
+      <PostDescriptionModal 
+        visible={!!activeDescPost} 
+        onClose={() => setActiveDescPost(null)} 
+        author={activeDescPost?.author} 
+        date={activeDescPost?.date} 
+        description={activeDescPost?.description} 
+      />
+      
+      <ShareModal 
+        visible={!!activeSharePost} 
+        onClose={() => setActiveSharePost(null)} 
+        onShareInternal={() => { console.log("Republié"); setActiveSharePost(null); }} 
+        onShareExternal={() => { console.log("Lien copié"); setActiveSharePost(null); }} 
+      />
+      
+      <PostOptionsModal 
+        visible={!!activeOptionsPost} 
+        onClose={() => setActiveOptionsPost(null)} 
+        isMyPost={activeOptionsPost?.author?.pseudo === 'Kevy'}
+        onEdit={() => { console.log("Edition"); setActiveOptionsPost(null); }}
+        onDelete={() => { console.log("Suppression"); setActiveOptionsPost(null); }}
+        onSave={() => { console.log("Sauvegarde"); setActiveOptionsPost(null); }}
+        onUnfollow={() => { console.log("Unfollow"); setActiveOptionsPost(null); }}
+        onReport={() => { console.log("Signalement"); setActiveOptionsPost(null); }}
       />
     </View>
   );

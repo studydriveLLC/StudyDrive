@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Edit2, Trash2, Bookmark, UserMinus, AlertTriangle, X } from 'lucide-react-native';
-import LiquidModal from '../ui/LiquidModal';
+import { Edit2, Trash2, Bookmark, UserMinus, AlertTriangle } from 'lucide-react-native';
+import BottomSheet from '../ui/BottomSheet';
 import { useAppTheme } from '../../theme/theme';
 
 export default function PostOptionsModal({ visible, onClose, isMyPost, onEdit, onDelete, onSave, onUnfollow, onReport }) {
@@ -25,43 +25,41 @@ export default function PostOptionsModal({ visible, onClose, isMyPost, onEdit, o
   );
 
   return (
-    <LiquidModal visible={visible} onClose={onClose}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Options</Text>
-        <Pressable onPress={onClose} style={styles.closeButton}>
-          <X color={theme.colors.textMuted} size={24} />
-        </Pressable>
-      </View>
+    <BottomSheet isVisible={visible} onClose={onClose}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Options</Text>
+        </View>
 
-      {isMyPost ? (
-        <>
-          {renderOption(<Edit2 color={theme.colors.primaryDark} size={20} />, "Modifier la publication", onEdit)}
-          {renderOption(<Trash2 color={theme.colors.error} size={20} />, "Supprimer", onDelete, true)}
-        </>
-      ) : (
-        <>
-          {renderOption(<Bookmark color={theme.colors.primaryDark} size={20} />, "Sauvegarder", onSave)}
-          {renderOption(<UserMinus color={theme.colors.primaryDark} size={20} />, "Ne plus suivre l'auteur", onUnfollow)}
-          {renderOption(<AlertTriangle color={theme.colors.error} size={20} />, "Signaler la publication", onReport, true)}
-        </>
-      )}
-    </LiquidModal>
+        {isMyPost ? (
+          <>
+            {renderOption(<Edit2 color={theme.colors.primaryDark} size={20} />, "Modifier la publication", onEdit)}
+            {renderOption(<Trash2 color={theme.colors.error} size={20} />, "Supprimer", onDelete, true)}
+          </>
+        ) : (
+          <>
+            {renderOption(<Bookmark color={theme.colors.primaryDark} size={20} />, "Sauvegarder", onSave)}
+            {renderOption(<UserMinus color={theme.colors.primaryDark} size={20} />, "Ne plus suivre l'auteur", onUnfollow)}
+            {renderOption(<AlertTriangle color={theme.colors.error} size={20} />, "Signaler la publication", onReport, true)}
+          </>
+        )}
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 20,
+    alignItems: 'center',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-  },
-  closeButton: {
-    padding: 4,
   },
   optionRow: {
     flexDirection: 'row',

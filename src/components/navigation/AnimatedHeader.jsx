@@ -1,19 +1,23 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, TextInput, Pressable, DeviceEventEmitter } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, DeviceEventEmitter, Text } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Search, Bell, Menu, Home } from 'lucide-react-native';
+import { Search, Bell, Menu, X } from 'lucide-react-native';
+import { useDrawerStatus } from '@react-navigation/drawer';
 import { useAppTheme } from '../../theme/theme';
 import { useHeaderAnimations } from './useHeaderAnimations';
 import AnimatedSearchPlaceholder from './AnimatedSearchPlaceholder';
 
-export default function AnimatedHeader({ scrollY, title = "StudyDrive", navigation }) {
+export default function AnimatedHeader({ scrollY, navigation }) {
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
   
   const [searchValue, setSearchValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+
+  // Détection en temps réel de l'état du menu latéral
+  const isDrawerOpen = useDrawerStatus() === 'open';
 
   const animations = useHeaderAnimations(scrollY, insets);
 
@@ -34,29 +38,34 @@ export default function AnimatedHeader({ scrollY, title = "StudyDrive", navigati
       <View style={[styles.topRow, { height: 60 }]}>
         <View style={styles.leftSection}>
           <Animated.View style={[styles.logoContainer, animations.logoTranslateX, animations.logoOpacity]}>
-            <Home color={theme.colors.surface} size={28} strokeWidth={2.5} />
+            <Text style={[styles.logoText, { color: theme.colors.surface }]}>StudyDrive</Text>
           </Animated.View>
 
-          <Animated.View style={[styles.bellContainerAnimated, animations.bellTranslateX]}>
-            <Pressable onPress={() => console.log('Ouvrir les notifications')}>
+          <Animated.View style={[styles.bellContainerAnimated, animations.bellTranslateX, animations.bellOpacity]}>
+            <Pressable onPress={() => console.log('Ouvrir les notifications')} hitSlop={10}>
               <Bell color={theme.colors.surface} size={24} />
-              <View style={[styles.badge, { backgroundColor: theme.colors.error }]} />
+              <View style={[styles.badge, { backgroundColor: theme.colors.error, borderColor: theme.colors.primary }]} />
             </Pressable>
           </Animated.View>
         </View>
 
         <View style={styles.centerSection}>
-          <Animated.Text style={[styles.title, { color: theme.colors.surface }, animations.titleOpacity]}>
-            {title}
-          </Animated.Text>
           <Animated.View style={[styles.miniSearchContainer, animations.miniSearchOpacity]}>
             <Search color={theme.colors.surface} size={20} />
           </Animated.View>
         </View>
 
         <View style={styles.rightSection}>
-          <Pressable onPress={() => navigation.openDrawer && navigation.openDrawer()} style={styles.iconButton}>
-            <Menu color={theme.colors.surface} size={28} />
+          <Pressable 
+            onPress={() => isDrawerOpen ? navigation.closeDrawer() : navigation.openDrawer()} 
+            style={styles.iconButton} 
+            hitSlop={10}
+          >
+            {isDrawerOpen ? (
+              <X color={theme.colors.surface} size={28} />
+            ) : (
+              <Menu color={theme.colors.surface} size={28} />
+            )}
           </Pressable>
         </View>
       </View>
@@ -108,6 +117,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
   },
+  logoText: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
   bellContainerAnimated: {
     position: 'absolute',
     left: 0,
@@ -120,17 +134,11 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: '#5170FF',
   },
   centerSection: {
     flex: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    position: 'absolute',
   },
   miniSearchContainer: {
     position: 'absolute',
