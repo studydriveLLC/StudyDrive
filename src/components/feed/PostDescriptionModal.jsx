@@ -1,16 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
-import { MoreHorizontal } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
+import { X } from 'lucide-react-native';
+import LiquidModal from '../ui/LiquidModal';
 import { useAppTheme } from '../../theme/theme';
 
-export default function PostHeader({ author, date, description, onReadMore, onOptionsPress }) {
+export default function PostDescriptionModal({ visible, onClose, author, date, description }) {
   const theme = useAppTheme();
 
+  if (!author) return null;
+
   return (
-    <View style={styles.container}>
-      
-      <View style={styles.topRow}>
-        <View style={styles.userInfo}>
+    <LiquidModal visible={visible} onClose={onClose}>
+      <View style={styles.header}>
+        <View style={styles.authorInfo}>
           {author.avatar ? (
             <Image source={{ uri: author.avatar }} style={styles.avatar} />
           ) : (
@@ -20,49 +22,38 @@ export default function PostHeader({ author, date, description, onReadMore, onOp
               </Text>
             </View>
           )}
-          
           <View style={styles.metaData}>
-            <Text style={[styles.pseudo, { color: theme.colors.text }]}>
-              {author.pseudo}
-              {author.hasBadge && (
-                <Text style={{ color: theme.colors.primary }}> •</Text> 
-              )}
-            </Text>
+            <Text style={[styles.pseudo, { color: theme.colors.text }]}>{author.pseudo}</Text>
             <Text style={[styles.date, { color: theme.colors.textMuted }]}>{date}</Text>
           </View>
         </View>
-
-        <Pressable style={styles.optionsButton} onPress={onOptionsPress}>
-          <MoreHorizontal color={theme.colors.textMuted} size={20} />
+        
+        <Pressable onPress={onClose} style={styles.closeButton}>
+          <X color={theme.colors.textMuted} size={24} />
         </Pressable>
       </View>
 
-      {description && description.length > 0 && (
-        <Pressable onPress={onReadMore}>
-          <Text 
-            style={[styles.description, { color: theme.colors.text }]} 
-            numberOfLines={3}
-          >
-            {description}
-          </Text>
-        </Pressable>
-      )}
-
-    </View>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Text style={[styles.fullText, { color: theme.colors.text }]}>
+          {description}
+        </Text>
+      </ScrollView>
+    </LiquidModal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 8,
-  },
-  topRow: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 20,
   },
-  userInfo: {
+  authorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -79,7 +70,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaData: {
-    marginLeft: 10,
+    marginLeft: 12,
   },
   pseudo: {
     fontSize: 16,
@@ -89,11 +80,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  optionsButton: {
+  closeButton: {
     padding: 4,
+    borderRadius: 20,
   },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
+  scrollContainer: {
+    maxHeight: 400, 
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  fullText: {
+    fontSize: 16,
+    lineHeight: 26,
   },
 });

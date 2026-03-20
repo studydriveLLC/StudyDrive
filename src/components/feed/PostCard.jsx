@@ -4,28 +4,37 @@ import PostHeader from './PostHeader';
 import PostContent from './PostContent';
 import PostActions from './PostActions';
 import CommentsModal from './CommentsModal';
+import PostDescriptionModal from './PostDescriptionModal';
+import ShareModal from './ShareModal';
+import PostOptionsModal from './PostOptionsModal';
 import { useAppTheme } from '../../theme/theme';
 
 export default function PostCard({ post }) {
   const theme = useAppTheme();
   
   const [isCommentsVisible, setIsCommentsVisible] = useState(false);
+  const [isDescriptionVisible, setIsDescriptionVisible] = useState(false);
+  const [isShareVisible, setIsShareVisible] = useState(false);
+  const [isOptionsVisible, setIsOptionsVisible] = useState(false);
 
-  const handleReadMore = () => {
-    console.log("Ouvrir la modale LiquidGlass pour lire toute la description");
-  };
+  // Simulation : Plus tard, cela sera géré via Redux (ex: currentUserId === post.author.id)
+  const isMyPost = post.author.pseudo === 'Kevy';
 
-  const handleMediaPress = () => {
-    console.log("Ouvrir le visualiseur de media plein ecran");
-  };
+  const handleReadMore = () => setIsDescriptionVisible(true);
+  const handleMediaPress = () => console.log("Ouvrir le visualiseur de media plein ecran");
+  const handleCommentPress = () => setIsCommentsVisible(true);
+  const handleSharePress = () => setIsShareVisible(true);
+  const handleOptionsPress = () => setIsOptionsVisible(true);
 
-  const handleCommentPress = () => {
-    setIsCommentsVisible(true);
-  };
+  // Actions de la modale d'options
+  const handleEdit = () => { console.log("Edition"); setIsOptionsVisible(false); };
+  const handleDelete = () => { console.log("Suppression"); setIsOptionsVisible(false); };
+  const handleSave = () => { console.log("Sauvegarde"); setIsOptionsVisible(false); };
+  const handleUnfollow = () => { console.log("Ne plus suivre"); setIsOptionsVisible(false); };
+  const handleReport = () => { console.log("Signalement"); setIsOptionsVisible(false); };
 
-  const handleSharePress = () => {
-    console.log("Ouvrir la modale de partage");
-  };
+  const executeInternalShare = () => { console.log("Republier id", post.id); setIsShareVisible(false); };
+  const executeExternalShare = () => { console.log("Lien externe id", post.id); setIsShareVisible(false); };
 
   return (
     <>
@@ -35,6 +44,7 @@ export default function PostCard({ post }) {
           date={post.date} 
           description={post.description} 
           onReadMore={handleReadMore}
+          onOptionsPress={handleOptionsPress}
         />
 
         <PostContent 
@@ -52,9 +62,19 @@ export default function PostCard({ post }) {
         />
       </View>
 
-      <CommentsModal 
-        visible={isCommentsVisible} 
-        onClose={() => setIsCommentsVisible(false)} 
+      <CommentsModal visible={isCommentsVisible} onClose={() => setIsCommentsVisible(false)} />
+      <PostDescriptionModal visible={isDescriptionVisible} onClose={() => setIsDescriptionVisible(false)} author={post.author} date={post.date} description={post.description} />
+      <ShareModal visible={isShareVisible} onClose={() => setIsShareVisible(false)} onShareInternal={executeInternalShare} onShareExternal={executeExternalShare} />
+      
+      <PostOptionsModal 
+        visible={isOptionsVisible} 
+        onClose={() => setIsOptionsVisible(false)} 
+        isMyPost={isMyPost}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onSave={handleSave}
+        onUnfollow={handleUnfollow}
+        onReport={handleReport}
       />
     </>
   );
