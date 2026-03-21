@@ -1,4 +1,4 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery, retry } from '@reduxjs/toolkit/query/react';
 import { getToken, saveToken, deleteToken } from '../secureStoreAdapter';
 import { setCredentials, logout, setTokenRefreshing } from './authSlice';
 
@@ -8,27 +8,31 @@ if (!rawBaseUrl && __DEV__) {
   console.warn("ATTENTION: EXPO_PUBLIC_API_URL n'est pas defini dans le fichier .env !");
 }
 
-const baseQuery = fetchBaseQuery({
-  baseUrl: rawBaseUrl,
-  prepareHeaders: async (headers, { getState, endpoint }) => {
-    let token = getState().auth?.token;
+// Creation de notre moteur de requete avec un systeme de tentatives automatiques
+const staggeredBaseQuery = retry(
+  fetchBaseQuery({
+    baseUrl: rawBaseUrl,
+    prepareHeaders: async (headers, { getState, endpoint }) => {
+      let token = getState().auth?.token;
 
-    if (!token) {
-      token = await getToken('accessToken');
-    }
+      if (!token) {
+        token = await getToken('accessToken');
+      }
 
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
 
-    const uploadEndpoints = ['uploadResource', 'uploadAvatar', 'uploadPostMedia'];
-    if (uploadEndpoints.includes(endpoint)) {
-      headers.delete('Content-Type');
-    }
+      const uploadEndpoints = ['uploadResource', 'uploadAvatar', 'uploadPostMedia'];
+      if (uploadEndpoints.includes(endpoint)) {
+        headers.delete('Content-Type');
+      }
 
-    return headers;
-  },
-});
+      return headers;
+    },
+  }),
+  { maxRetries: 3 } // Si le reseau coupe, on retente jusqu'a 3 fois silencieusement
+);
 
 // Verrous pour gerer les appels concurrents au rafraichissement
 let isRefreshing = false;
@@ -44,7 +48,8 @@ const onRefreshed = (token) => {
 };
 
 const baseQueryWithReauth = async (args, api, extraOptions) => {
-  let result = await baseQuery(args, api, extraOptions);
+  // On utilise notre nouveau moteur avec retry ici
+  let result = await staggeredBaseQuery(args, api, extraOptions);
 
   if (result.error && result.error.status === 401) {
     if (!isRefreshing) {
@@ -52,7 +57,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
       api.dispatch(setTokenRefreshing(true));
 
       // On tente de rafraichir. Le cookie httpOnly est envoye automatiquement.
-      const refreshResult = await baseQuery(
+      const refreshResult = await staggeredBaseQuery(
         { url: '/v1/auth/refresh', method: 'POST' },
         api,
         extraOptions
@@ -70,7 +75,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
         api.dispatch(setTokenRefreshing(false));
 
         // Rejouer la requete initiale echouee avec le nouveau token
-        result = await baseQuery(args, api, extraOptions);
+        result = await staggeredBaseQuery(args, api, extraOptions);
       } else {
         // Le refresh token est mort ou invalide, deconnexion totale
         isRefreshing = false;
@@ -87,7 +92,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
         });
       });
       // Une fois le refresh fini, on rejoue
-      result = await baseQuery(args, api, extraOptions);
+      result = await staggeredBaseQuery(args, api, extraOptions);
     }
   }
 

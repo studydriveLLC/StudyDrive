@@ -107,6 +107,8 @@ export default function FeedScreen({ navigation }) {
       setIsSmartRefreshing(true);
       
       try {
+        await refetch();
+        
         if (listRef.current) {
           if (typeof listRef.current.scrollToOffset === 'function') {
             listRef.current.scrollToOffset({ offset: 0, animated: false });
@@ -115,11 +117,7 @@ export default function FeedScreen({ navigation }) {
           }
         }
       } catch (error) {
-        console.log('Erreur de scroll native (ignoree) :', error);
-      }
-      
-      try {
-        await refetch();
+        console.log('Erreur silencieuse lors du rafraichissement', error);
       } finally {
         setIsSmartRefreshing(false);
         isFetchingRef.current = false;

@@ -58,6 +58,10 @@ export default function RessourcesScreen({ navigation }) {
       setIsSmartRefreshing(true);
       
       try {
+        // 1. On attend que les donnees soient recuperees (avec retry automatique en fond)
+        await refetch();
+        
+        // 2. Seulement apres le succes, on remonte l'ecran silencieusement
         if (listRef.current) {
           if (typeof listRef.current.scrollToOffset === 'function') {
             listRef.current.scrollToOffset({ offset: 0, animated: false });
@@ -66,12 +70,9 @@ export default function RessourcesScreen({ navigation }) {
           }
         }
       } catch (error) {
-        console.log('Erreur de scroll native (ignoree) :', error);
-      }
-      
-      try {
-        await refetch();
+        console.log('Erreur silencieuse lors du rafraichissement des ressources', error);
       } finally {
+        // 3. On coupe l'overlay
         setIsSmartRefreshing(false);
         isFetchingRef.current = false;
       }
