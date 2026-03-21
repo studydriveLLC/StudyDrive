@@ -43,7 +43,7 @@ export default function PostCard({
       <View style={styles.internalPadding}>
         <PostActions
           likesCount={post.likes}
-          commentsCount={post.comments}
+          commentsCount={post.commentsCount}
           sharesCount={post.shares}
           isLikedByMe={post.isLikedByMe}
           onCommentPress={() => onOpenComments && onOpenComments(post)}

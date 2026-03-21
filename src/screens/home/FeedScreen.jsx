@@ -15,6 +15,23 @@ import SmartRefreshOverlay from '../../components/ui/SmartRefreshOverlay';
 import { useGetFeedQuery, useToggleLikeMutation } from '../../store/api/postApiSlice';
 import { useAppTheme } from '../../theme/theme';
 
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "A l'instant";
+  if (diffMins < 60) return `Il y a ${diffMins}min`;
+  if (diffHours < 24) return `Il y a ${diffHours}h`;
+  if (diffDays < 7) return `Il y a ${diffDays}j`;
+
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
 const mapPostFromBackend = (post) => {
   const media = (post.content?.mediaUrls || []).map((url) => ({
     type: post.content?.mediaType || 'image',
@@ -34,28 +51,12 @@ const mapPostFromBackend = (post) => {
     date: formatDate(post.createdAt),
     description: post.content?.text || '',
     likes: post.stats?.likes || 0,
-    comments: post.stats?.comments || 0,
+    commentsCount: post.stats?.comments || 0,
     shares: post.stats?.shares || 0,
     isLikedByMe: post.isLikedByMe || false,
     media: media,
+    comments: post.comments || [],
   };
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "A l'instant";
-  if (diffMins < 60) return `Il y a ${diffMins}min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 };
 
 export default function FeedScreen({ navigation }) {
@@ -106,7 +107,6 @@ export default function FeedScreen({ navigation }) {
       isFetchingRef.current = true;
       setIsSmartRefreshing(true);
       
-      // SECURITE : Minuteur de secours pour eviter un blocage definitif de l'interface
       let isTimeout = false;
       const safetyTimer = setTimeout(() => {
         isTimeout = true;

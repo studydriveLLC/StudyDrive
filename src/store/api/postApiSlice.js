@@ -2,20 +2,17 @@ import { apiSlice } from '../slices/apiSlice';
 
 export const postApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-    // Recuperer le feed de l'utilisateur connecte
     getFeed: builder.query({
       query: ({ page = 1, limit = 10 } = {}) => ({
         url: '/v1/social/feed',
         params: { page, limit },
       }),
       transformResponse: (response) => {
-        // Le backend renvoie { status, results, data: { posts } }
         return response.data?.posts || [];
       },
       providesTags: ['Post'],
     }),
 
-    // Creer une nouvelle publication
     createPost: builder.mutation({
       query: (postData) => ({
         url: '/v1/social/posts',
@@ -25,7 +22,6 @@ export const postApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ['Post'],
     }),
 
-    // Supprimer une publication
     deletePost: builder.mutation({
       query: (postId) => ({
         url: `/v1/social/posts/${postId}`,
@@ -34,26 +30,51 @@ export const postApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ['Post'],
     }),
 
-    // Liker / Deliker une publication
     toggleLike: builder.mutation({
       query: (postId) => ({
         url: `/v1/social/posts/${postId}/like`,
         method: 'POST',
       }),
-      // Mise a jour optimiste : on met a jour le cache directement
-      optimisticUpdate: (result, postId, { cacheData }) => {
-        // Cette logique sera geree cote composant
+      async onQueryStarted(postId, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+            const post = draft.find((p) => p._id === postId);
+            if (post) {
+              post.isLikedByMe = !post.isLikedByMe;
+              post.stats.likes += post.isLikedByMe ? 1 : -1;
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
       },
-      invalidatesTags: ['Post'],
     }),
 
-    // Ajouter un commentaire
     addComment: builder.mutation({
       query: ({ postId, text }) => ({
         url: `/v1/social/posts/${postId}/comments`,
         method: 'POST',
         body: { text },
       }),
+      async onQueryStarted({ postId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+              const post = draft.find((p) => p._id === postId);
+              if (post) {
+                post.comments.push(data.data.comment);
+                post.stats.comments += 1;
+              }
+            })
+          );
+        } catch (error) {
+          console.log('Erreur silencieuse ajout commentaire:', error);
+        }
+      },
       invalidatesTags: ['Post'],
     }),
   }),

@@ -29,7 +29,6 @@ export default function CommentsModal({ visible, onClose, post }) {
   const [newComment, setNewComment] = useState('');
   const [addComment, { isLoading: isAdding }] = useAddCommentMutation();
 
-  // Comments depuis le post (peuvent etre charges separement plus tard)
   const comments = post?.comments || [];
 
   const handleSend = async () => {
@@ -38,7 +37,6 @@ export default function CommentsModal({ visible, onClose, post }) {
     try {
       await addComment({ postId: post._id, text: newComment.trim() }).unwrap();
       setNewComment('');
-      // Le parent peut gerer le rafraichissement
     } catch (error) {
       console.log('Erreur ajout commentaire:', error);
     }
@@ -109,6 +107,7 @@ export default function CommentsModal({ visible, onClose, post }) {
                 text: comment.text,
                 time: formatCommentTime(comment.createdAt),
                 avatar: comment.user?.avatar || null,
+                hasBadge: comment.user?.badgeType !== 'none' && comment.user?.badgeType !== undefined
               }}
             />
           ))
