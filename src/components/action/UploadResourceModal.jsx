@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, Platform } from 'react-native';
 import { FileUp, X, File, CheckCircle2 } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence } from 'react-native-reanimated';
 import BottomSheet from '../ui/BottomSheet';
 import { useAppTheme } from '../../theme/theme';
-import apiClient from '../../api/client';
+import { useUploadResourceMutation } from '../../store/api/resourceApiSlice';
 
-const CATEGORIES = ['Microbiologie', 'Biochimie', 'Qualité', 'Laboratoire'];
+const CATEGORIES = ['Microbiologie', 'Biochimie', 'Qualite', 'Laboratoire'];
 const LEVELS = ['BTS 1', 'BTS 2', 'Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
 
 const getMimeType = (fileName, fallbackMime) => {
@@ -29,16 +29,32 @@ const getMimeType = (fileName, fallbackMime) => {
 export default function UploadResourceModal({ visible, onClose }) {
   const theme = useAppTheme();
   
+  const [uploadResource, { isLoading }] = useUploadResourceMutation();
+
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [level, setLevel] = useState(LEVELS[0]);
   
-  const [isUploading, setIsUploading] = useState(false);
   const [isUploadSuccess, setIsUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
   
-  const uploadProgress = useSharedValue(0);
+  const progressValue = useSharedValue(0);
+
+  useEffect(() => {
+    if (isLoading) {
+      progressValue.value = withRepeat(
+        withSequence(
+          withTiming(100, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 0 })
+        ),
+        -1,
+        false
+      );
+    } else {
+      progressValue.value = 0;
+    }
+  }, [isLoading]);
 
   const handlePickFile = async () => {
     setUploadError('');
@@ -86,10 +102,8 @@ export default function UploadResourceModal({ visible, onClose }) {
   const handleUpload = async () => {
     if (!file || !title.trim()) return;
 
-    setIsUploading(true);
     setIsUploadSuccess(false);
     setUploadError('');
-    uploadProgress.value = 0;
 
     const formData = new FormData();
     formData.append('title', title.trim());
@@ -103,43 +117,26 @@ export default function UploadResourceModal({ visible, onClose }) {
     });
 
     try {
-      await apiClient.post('/resources', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Accept': 'application/json',
-        },
-        timeout: 120000, 
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            uploadProgress.value = withTiming(percentCompleted, { duration: 200, easing: Easing.linear });
-          }
-        },
-      });
-
-      uploadProgress.value = withTiming(100, { duration: 200 });
-      setIsUploadSuccess(true);
+      await uploadResource(formData).unwrap();
       
+      setIsUploadSuccess(true);
       setTimeout(() => {
-        setIsUploading(false);
-        setIsUploadSuccess(false);
         setFile(null);
         setTitle('');
-        uploadProgress.value = 0;
+        setIsUploadSuccess(false);
         onClose();
       }, 1500);
 
     } catch (error) {
-      console.log("Detail de l'erreur reseau :", error.message, error.response?.data);
-      setIsUploading(false);
-      setIsUploadSuccess(false);
-      uploadProgress.value = 0;
-      setUploadError("Le delai d'envoi a expire ou le fichier a ete rejete.");
+      console.log("[FRONTEND UPLOAD ERROR] Detail :", error);
+      const errorMessage = error?.data?.message || "Erreur réseau. Le fichier a été rejeté ou le délai a expiré.";
+      setUploadError(errorMessage);
     }
   };
 
   const progressStyle = useAnimatedStyle(() => ({
-    width: `${uploadProgress.value}%`,
+    width: `${progressValue.value}%`,
+    opacity: isLoading ? 0.3 : 0
   }));
 
   const isFormValid = file && title.trim().length > 3;
@@ -149,14 +146,14 @@ export default function UploadResourceModal({ visible, onClose }) {
       {uploadError ? <Text style={[styles.errorText, { color: theme.colors.error || 'red' }]}>{uploadError}</Text> : null}
       <Pressable 
         style={[styles.submitButton, { backgroundColor: isFormValid ? theme.colors.primary : theme.colors.primaryLight }]}
-        disabled={!isFormValid || isUploading}
+        disabled={!isFormValid || isLoading}
         onPress={handleUpload}
       >
-        {isUploading && (
+        {isLoading && (
           <Animated.View style={[styles.progressBar, { backgroundColor: theme.colors.primaryDark }, progressStyle]} />
         )}
         <Text style={[styles.submitText, { color: isFormValid ? theme.colors.surface : theme.colors.textDisabled }]}>
-          {isUploading ? "Envoi en cours..." : "Partager le document"}
+          {isLoading ? "Envoi en cours..." : "Partager le document"}
         </Text>
       </Pressable>
     </View>
@@ -187,7 +184,7 @@ export default function UploadResourceModal({ visible, onClose }) {
               <Text style={[styles.fileName, { color: theme.colors.primaryDark }]} numberOfLines={1}>{file.name}</Text>
               <Text style={[styles.fileSize, { color: theme.colors.primary }]}>{file.size} MB</Text>
             </View>
-            {!isUploading && (
+            {!isLoading && (
               <Pressable onPress={() => setFile(null)} hitSlop={10} style={styles.removeFileBtn}>
                 <X color={theme.colors.primaryDark} size={20} />
               </Pressable>
@@ -206,7 +203,7 @@ export default function UploadResourceModal({ visible, onClose }) {
             placeholderTextColor={theme.colors.textDisabled}
             value={title}
             onChangeText={setTitle}
-            editable={!isUploading}
+            editable={!isLoading}
           />
         </View>
 
@@ -220,7 +217,7 @@ export default function UploadResourceModal({ visible, onClose }) {
                   backgroundColor: level === lvl ? theme.colors.primary : theme.colors.surface,
                   borderColor: level === lvl ? theme.colors.primary : theme.colors.border
                 }]}
-                onPress={() => !isUploading && setLevel(lvl)}
+                onPress={() => !isLoading && setLevel(lvl)}
               >
                 <Text style={[styles.pillText, { color: level === lvl ? theme.colors.surface : theme.colors.text }]}>
                   {lvl}
@@ -240,7 +237,7 @@ export default function UploadResourceModal({ visible, onClose }) {
                   backgroundColor: category === cat ? theme.colors.primary : theme.colors.surface,
                   borderColor: category === cat ? theme.colors.primary : theme.colors.border
                 }]}
-                onPress={() => !isUploading && setCategory(cat)}
+                onPress={() => !isLoading && setCategory(cat)}
               >
                 <Text style={[styles.pillText, { color: category === cat ? theme.colors.surface : theme.colors.text }]}>
                   {cat}

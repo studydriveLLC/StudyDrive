@@ -7,6 +7,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
         url: '/resources',
         method: 'POST',
         body: formData,
+        formData: true, // <--- LA CLÉ MAGIQUE : Empêche RTK Query de forcer le JSON !
       }),
     }),
   }),
