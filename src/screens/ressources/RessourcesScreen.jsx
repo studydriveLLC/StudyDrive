@@ -41,11 +41,12 @@ export default function RessourcesScreen({ navigation }) {
     };
   }, []);
 
-  // Smart tab press - refresh + scroll to top
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('SMART_TAB_PRESS', (event) => {
       if (event.routeName !== 'Ressources') return;
-      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      if (listRef.current) {
+        listRef.current.scrollToOffset({ offset: 0, animated: true });
+      }
       refetch();
     });
     return () => subscription.remove();

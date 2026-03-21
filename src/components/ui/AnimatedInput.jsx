@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, Animated, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, TextInput, Animated, StyleSheet, Platform, TouchableOpacity, Pressable } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { useAppTheme, spacing, typography, borderRadius } from '../../theme/theme';
 
@@ -10,6 +10,7 @@ export default function AnimatedInput({
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
+  const inputRef = useRef(null);
   const animatedIsFocused = useRef(new Animated.Value(value === '' ? 0 : 1)).current;
 
   useEffect(() => {
@@ -42,8 +43,14 @@ export default function AnimatedInput({
     outputRange: [theme.colors.border, theme.colors.primary],
   });
 
+  const handlePress = () => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   return (
-    <View style={[styles.container, style]}>
+    <Pressable style={[styles.container, style]} onPress={handlePress}>
       <Animated.View style={[
         styles.inputWrapper, 
         { borderColor, backgroundColor: theme.colors.surface }
@@ -54,6 +61,7 @@ export default function AnimatedInput({
         
         <View style={styles.inputRow}>
           <TextInput
+            ref={inputRef}
             style={[
               styles.input, 
               { color: theme.colors.text },
@@ -84,7 +92,7 @@ export default function AnimatedInput({
           )}
         </View>
       </Animated.View>
-    </View>
+    </Pressable>
   );
 }
 
