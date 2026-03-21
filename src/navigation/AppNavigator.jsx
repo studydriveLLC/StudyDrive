@@ -14,6 +14,7 @@ import MainTabNavigator from './MainTabNavigator';
 import MenuScreen from '../screens/profile/MenuScreen';
 import ErrorToast from '../components/ui/ErrorToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
+import TokenGuardian from '../components/auth/TokenGuardian';
 
 const Stack = createStackNavigator();
 
@@ -29,7 +30,7 @@ const fastSpringConfig = {
   },
 };
 
-const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL;
 
 export default function AppNavigator() {
   const dispatch = useDispatch();
@@ -45,10 +46,8 @@ export default function AppNavigator() {
         if (token && userDataStr) {
           const savedUser = JSON.parse(userDataStr);
           
-          // 1. Connexion immediate (Offline-first) grace au cache local
           dispatch(setCredentials({ user: savedUser, token }));
 
-          // 2. Verification silencieuse en arriere-plan
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -63,17 +62,13 @@ export default function AppNavigator() {
             if (profileResponse.ok) {
               const profileData = await profileResponse.json();
               dispatch(setCredentials({ user: profileData.data?.user || profileData.data, token }));
-            } else if (profileResponse.status === 401 || profileResponse.status === 403) {
-              // Deconnexion STRICTE uniquement si le token est rejete par le serveur
-              dispatch(setCredentials({ user: null, token: null }));
             }
+            // FINIE LA DECONNEXION BRUTALE ICI ! On fait confiance a apiSlice et au Guardian pour gerer les 401
           } catch (fetchError) {
             clearTimeout(timeoutId);
-            // On log l'erreur mais ON NE DECONNECTE PLUS l'utilisateur. La session cachee est maintenue.
-            console.warn('Backend injoignable (Cold Start ou reseau instable). Session locale maintenue.');
+            console.warn('Backend injoignable. Session locale maintenue.');
           }
         } else {
-          // Aucun token ou utilisateur en memoire
           dispatch(setCredentials({ user: null, token: null }));
         }
       } catch (error) {
@@ -106,6 +101,7 @@ export default function AppNavigator() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={[styles.mainWrapper, { backgroundColor: theme.colors.background }]}>
         <TopInsetBox />
+        <TokenGuardian />
         <Stack.Navigator
           screenOptions={{
             headerShown: false,

@@ -5,6 +5,7 @@ const initialState = {
   token: null,
   isAuthenticated: false,
   isLoading: true,
+  isTokenRefreshing: false,
 };
 
 const authSlice = createSlice({
@@ -28,13 +29,17 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.isLoading = false;
+      state.isTokenRefreshing = false;
     },
     setAuthLoading: (state, action) => {
       state.isLoading = action.payload;
+    },
+    setTokenRefreshing: (state, action) => {
+      state.isTokenRefreshing = action.payload;
     }
   },
 });
 
-export const { setCredentials, updateUser, logout, setAuthLoading } = authSlice.actions;
+export const { setCredentials, updateUser, logout, setAuthLoading, setTokenRefreshing } = authSlice.actions;
 
 export default authSlice.reducer;
