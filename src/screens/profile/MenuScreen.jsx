@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Settings, Bell, ShieldQuestion, UserCheck, LogOut } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import * as SecureStore from 'expo-secure-store';
 
 import MenuItem from '../../components/profile/MenuItem';
 import EditProfileModal from '../../components/profile/EditProfileModal';
@@ -12,55 +11,55 @@ import { useAppTheme } from '../../theme/theme';
 
 import { useUpdateProfileMutation, useLogoutMutation } from '../../store/api/authApiSlice';
 import { updateUser, logout } from '../../store/slices/authSlice';
+import { deleteToken, saveToken } from '../../store/secureStoreAdapter'; // Utilisation de TON adapter hybride
 
 export default function MenuScreen({ navigation }) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
 
-  // 1. Récupération de l'utilisateur réel depuis Redux
   const user = useSelector((state) => state.auth.user);
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
-  // 2. Initialisation des mutations API
   const [updateProfileApi, { isLoading: isUpdating }] = useUpdateProfileMutation();
   const [logoutApi] = useLogoutMutation();
 
   const handleUpdateProfile = async (updatedData) => {
     try {
-      // Appel réseau
       const response = await updateProfileApi(updatedData).unwrap();
-      
-      // Mise à jour de l'état global avec les nouvelles données du serveur
-      // On anticipe la structure de réponse : data.user (sinon fallback sur updatedData)
       const newUserData = response.data?.user || updatedData;
+      
+      // Mise à jour de Redux
       dispatch(updateUser(newUserData));
+      
+      // Mise à jour vitale dans le stockage local pour survivre au redémarrage
+      const currentUserData = await getToken('userData');
+      const parsedUser = currentUserData ? JSON.parse(currentUserData) : {};
+      await saveToken('userData', JSON.stringify({ ...parsedUser, ...newUserData }));
       
       setIsEditModalVisible(false);
     } catch (error) {
       console.error("Erreur lors de la mise à jour du profil :", error);
-      // Ici, on pourrait déclencher un composant ErrorToast si tu en as un
     }
   };
 
   const handleConfirmLogout = async () => {
     try {
-      // Invalidation du token côté serveur (cookie refreshToken)
       await logoutApi().unwrap();
     } catch (error) {
       console.error("Erreur serveur lors de la déconnexion, forçage local.", error);
     } finally {
-      // Nettoyage critique côté client quoi qu'il arrive
+      // Nettoyage critique via l'adapter (supporte Mobile ET Web)
       try {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
+        await deleteToken('accessToken');
+        await deleteToken('refreshToken');
+        await deleteToken('userData'); // Suppression de l'identité
       } catch (storeError) {
-        console.error("Erreur lors du nettoyage du SecureStore", storeError);
+        console.error("Erreur lors du nettoyage du stockage", storeError);
       }
       
-      // Réinitialisation de l'état Redux (déclenche la redirection auto vers Login)
       dispatch(logout());
     }
   };
@@ -123,7 +122,6 @@ export default function MenuScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Modal d'édition du profil avec gestion de l'état de chargement */}
       <EditProfileModal 
         visible={isEditModalVisible} 
         onClose={() => setIsEditModalVisible(false)} 
@@ -132,7 +130,6 @@ export default function MenuScreen({ navigation }) {
         isLoading={isUpdating}
       />
 
-      {/* Modal de confirmation de déconnexion */}
       <LogoutModal
         visible={isLogoutModalVisible}
         onClose={() => setIsLogoutModalVisible(false)}

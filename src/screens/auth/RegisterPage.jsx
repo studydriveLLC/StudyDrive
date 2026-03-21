@@ -112,11 +112,13 @@ export default function RegisterPage({ navigation }) {
     try {
       const response = await register(submitData).unwrap();
       const { accessToken, user } = response.data;
+      
       await saveToken('accessToken', accessToken);
+      await saveToken('userData', JSON.stringify(user)); // Sauvegarde vitale pour le redemarrage
       dispatch(setCredentials({ user, token: accessToken }));
     } catch (error) {
-      // 🔥 MOUCHARD FRONTEND 🔥
-      console.error("🚨 ERREUR API (FRONTEND) :", JSON.stringify(error, null, 2));
+      // MOUCHARD FRONTEND NETTOYE
+      console.error("[ERREUR API FRONTEND] :", JSON.stringify(error, null, 2));
       
       const errorMessage = error?.data?.errors?.[0]?.message || error?.data?.message || 'Erreur d\'inscription.';
       dispatch(showErrorToast({ message: errorMessage }));
@@ -157,13 +159,13 @@ export default function RegisterPage({ navigation }) {
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.primary }]}>Rejoindre LokoDrive</Text>
             <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
-              Créez votre compte étudiant pour accéder au campus.
+              Creez votre compte etudiant pour acceder au campus.
             </Text>
           </View>
 
           <View style={styles.row}>
             <View style={styles.halfInputContainer}>
-              <AnimatedInput label="Prénom" value={formData.firstName} onChangeText={(val) => handleChange('firstName', val)} />
+              <AnimatedInput label="Prenom" value={formData.firstName} onChangeText={(val) => handleChange('firstName', val)} />
             </View>
             <View style={styles.halfInputContainer}>
               <AnimatedInput label="Nom" value={formData.lastName} onChangeText={(val) => handleChange('lastName', val)} />
@@ -194,11 +196,11 @@ export default function RegisterPage({ navigation }) {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <AnimatedInput label="Téléphone" value={formData.phone} onChangeText={(val) => handleChange('phone', val)} keyboardType="phone-pad" />
+              <AnimatedInput label="Telephone" value={formData.phone} onChangeText={(val) => handleChange('phone', val)} keyboardType="phone-pad" />
             </View>
           </View>
 
-          <AnimatedInput label="Université" value={formData.university} onChangeText={(val) => handleChange('university', val)} />
+          <AnimatedInput label="Universite" value={formData.university} onChangeText={(val) => handleChange('university', val)} />
           
           <AnimatedInput 
             label="Mot de passe" 
@@ -224,11 +226,11 @@ export default function RegisterPage({ navigation }) {
               </View>
 
               <View style={styles.criteriaGrid}>
-                <CriterionCheck label="8 caractères min." isValid={passwordCriteria.length} />
+                <CriterionCheck label="8 caracteres min." isValid={passwordCriteria.length} />
                 <CriterionCheck label="Une majuscule" isValid={passwordCriteria.uppercase} />
                 <CriterionCheck label="Une minuscule" isValid={passwordCriteria.lowercase} />
                 <CriterionCheck label="Un chiffre" isValid={passwordCriteria.number} />
-                <CriterionCheck label="Un caractère spécial" isValid={passwordCriteria.special} />
+                <CriterionCheck label="Un caractere special" isValid={passwordCriteria.special} />
               </View>
             </View>
           )}
@@ -248,7 +250,7 @@ export default function RegisterPage({ navigation }) {
               {acceptTerms && <Check size={14} color={theme.colors.surface} />}
             </View>
             <Text style={[styles.termsText, { color: theme.colors.textMuted }]}>
-              En vous inscrivant vous êtes d'accord avec nos <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Conditions d'utilisation</Text>
+              En vous inscrivant vous etes d'accord avec nos <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Conditions d'utilisation</Text>
             </Text>
           </TouchableOpacity>
 
@@ -257,7 +259,7 @@ export default function RegisterPage({ navigation }) {
           </View>
 
           <TouchableOpacity style={styles.linkButton} onPress={() => navigation.goBack()} activeOpacity={0.6}>
-            <Text style={[styles.linkText, { color: theme.colors.primary }]}>Déjà un compte ? Se connecter</Text>
+            <Text style={[styles.linkText, { color: theme.colors.primary }]}>Deja un compte ? Se connecter</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

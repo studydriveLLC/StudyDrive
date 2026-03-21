@@ -35,6 +35,6 @@ headers.delete('Content-Type');
 return headers;
 },
 }),
-tagTypes: ['User', 'Post', 'Workspace', 'Notification'],
+tagTypes: ['User', 'Post', 'Workspace', 'Notification', 'Resource'],
 endpoints: (builder) => ({}),
 });

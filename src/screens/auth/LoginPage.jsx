@@ -39,6 +39,7 @@ export default function LoginPage({ navigation }) {
       const { accessToken, user } = response.data;
 
       await saveToken('accessToken', accessToken);
+      await saveToken('userData', JSON.stringify(user)); // Sauvegarde vitale pour le redemarrage
       dispatch(setCredentials({ user, token: accessToken }));
 
     } catch (error) {
@@ -58,7 +59,7 @@ export default function LoginPage({ navigation }) {
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.primary }]}>LokoDrive</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
-            Connectez-vous pour accéder au campus.
+            Connectez-vous pour acceder au campus.
           </Text>
         </View>
 
@@ -78,11 +79,11 @@ export default function LoginPage({ navigation }) {
 
         <TouchableOpacity 
           style={styles.forgotPasswordButton} 
-          onPress={() => console.log('Mot de passe oublié cliqué')}
+          onPress={() => console.log('Mot de passe oublie clique')}
           activeOpacity={0.6}
         >
           <Text style={[styles.forgotPasswordText, { color: theme.colors.primary }]}>
-            Mot de passe oublié ?
+            Mot de passe oublie ?
           </Text>
         </TouchableOpacity>
 
