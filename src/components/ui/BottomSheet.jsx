@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, Dimensions, Keyboard, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -21,31 +21,30 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
   const MAX_TRANSLATE_Y = insets.top + 60;
   const SHEET_HEIGHT = SCREEN_HEIGHT - MAX_TRANSLATE_Y;
 
+  const [isMounted, setIsMounted] = useState(isVisible);
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const opacity = useSharedValue(0);
   const keyboardHeight = useSharedValue(0);
 
   const slideConfig = { duration: 300, easing: Easing.out(Easing.cubic) };
 
-  // Debounce pour eviter les appels multiples de onClose
   const isClosingRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // Reset le flag quand la modale se re-ouvre
   useEffect(() => {
     if (isVisible) {
       isClosingRef.current = false;
-    }
-  }, [isVisible]);
-
-  useEffect(() => {
-    if (isVisible) {
+      setIsMounted(true);
       opacity.value = withTiming(1, { duration: 300 });
       translateY.value = withTiming(0, slideConfig);
     } else {
       opacity.value = withTiming(0, { duration: 200 });
-      translateY.value = withTiming(SCREEN_HEIGHT, slideConfig);
+      translateY.value = withTiming(SCREEN_HEIGHT, slideConfig, (finished) => {
+        if (finished) {
+          runOnJS(setIsMounted)(false);
+        }
+      });
     }
   }, [isVisible]);
 
@@ -107,7 +106,7 @@ export default function BottomSheet({ isVisible, onClose, children, footer }) {
     };
   });
 
-  if (!isVisible && translateY.value === SCREEN_HEIGHT) return null;
+  if (!isMounted) return null;
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]} pointerEvents="box-none">

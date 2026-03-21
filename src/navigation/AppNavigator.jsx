@@ -20,9 +20,9 @@ const Stack = createStackNavigator();
 const fastSpringConfig = {
   animation: 'spring',
   config: {
-    stiffness: 1500,
-    damping: 150,
-    mass: 3,
+    stiffness: 250,
+    damping: 20,
+    mass: 1,
     overshootClamping: true,
     restDisplacementThreshold: 0.01,
     restSpeedThreshold: 0.01,
@@ -41,22 +41,33 @@ export default function AppNavigator() {
       try {
         const token = await getToken('accessToken');
         if (token) {
-          // Restaure le token et fetche le profil utilisateur
-          const profileResponse = await fetch(`${rawBaseUrl}/v1/auth/me`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-          if (profileResponse.ok) {
-            const profileData = await profileResponse.json();
-            dispatch(
-              setCredentials({
-                user: profileData.data?.user || profileData.data,
-                token,
-              })
-            );
-          } else {
+          try {
+            const profileResponse = await fetch(`${rawBaseUrl}/v1/auth/me`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              dispatch(
+                setCredentials({
+                  user: profileData.data?.user || profileData.data,
+                  token,
+                })
+              );
+            } else if (profileResponse.status === 401) {
+              dispatch(setCredentials({ user: null, token: null }));
+            }
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            console.error('Erreur reseau ou timeout', fetchError);
             dispatch(setCredentials({ user: null, token: null }));
           }
         }
