@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, Platform } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system';
@@ -12,11 +12,11 @@ import ResourceOptionsModal from '../../components/ressources/ResourceOptionsMod
 import DocumentViewerModal from '../../components/ressources/DocumentViewerModal';
 import SmartRefreshOverlay from '../../components/ui/SmartRefreshOverlay';
 import { useAppTheme } from '../../theme/theme';
-import socketService from '../../services/socketService';
 import { 
   useGetResourcesQuery, 
   useDeleteResourceMutation, 
   useLogDownloadMutation,
+  useLogViewMutation,
   useGetResourceQuery,
   useToggleFavoriteMutation,
   useReportResourceMutation
@@ -30,7 +30,6 @@ export default function RessourcesScreen({ navigation }) {
   const isFetchingRef = useRef(false);
 
   const [downloads, setDownloads] = useState({});
-  const [localStats, setLocalStats] = useState({});
   const [activeOptionsResource, setActiveOptionsResource] = useState(null);
   const [activeDocumentUrl, setActiveDocumentUrl] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,6 +40,7 @@ export default function RessourcesScreen({ navigation }) {
   useGetResourceQuery(activeViewId, { skip: !activeViewId });
   
   const [logDownload] = useLogDownloadMutation();
+  const [logView] = useLogViewMutation();
   const [deleteResource] = useDeleteResourceMutation();
   const [toggleFavorite] = useToggleFavoriteMutation();
   const [reportResource] = useReportResourceMutation();
@@ -54,38 +54,6 @@ export default function RessourcesScreen({ navigation }) {
   }, [refetch]);
 
   useEffect(() => {
-    let socket;
-    const setupSockets = async () => {
-      socket = await socketService.connect();
-      
-      const handleNewResource = (data) => {
-        console.log('[Sockets] Nouvelle ressource detectee !', data);
-        refetch();
-      };
-
-      socket.on('newResource', handleNewResource);
-      socket.on('new_resource', handleNewResource);
-
-      socket.on('resourceStatsUpdated', (data) => {
-        setLocalStats(prev => ({
-          ...prev,
-          [data.id]: { views: data.views, downloads: data.downloads }
-        }));
-      });
-    };
-
-    setupSockets();
-
-    return () => {
-      if (socket) {
-        socket.off('newResource');
-        socket.off('new_resource');
-        socket.off('resourceStatsUpdated');
-      }
-    };
-  }, [refetch]);
-
-  useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('SMART_TAB_PRESS', async (event) => {
       if (event.routeName !== 'Ressources') return;
       if (isFetchingRef.current) return;
@@ -94,14 +62,14 @@ export default function RessourcesScreen({ navigation }) {
       setIsSmartRefreshing(true);
       
       setTimeout(() => {
-        if (listRef.current) {
-          if (typeof listRef.current.scrollToOffset === 'function') {
+        try {
+          if (listRef.current) {
             listRef.current.scrollToOffset({ offset: 0, animated: true });
-          } else if (listRef.current.getNode && typeof listRef.current.getNode().scrollToOffset === 'function') {
-            listRef.current.getNode().scrollToOffset({ offset: 0, animated: true });
           }
+        } catch (error) {
+          console.log('Erreur silencieuse scroll', error);
         }
-      }, 150);
+      }, 100);
       
       let isTimeout = false;
       const safetyTimer = setTimeout(() => {
@@ -129,20 +97,16 @@ export default function RessourcesScreen({ navigation }) {
     onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
 
-  const getOptimisticStats = (id, field, originalValue) => {
-    if (localStats[id] && localStats[id][field] !== undefined) return localStats[id][field];
-    return originalValue;
-  };
-
   const handleViewAction = async (resource) => {
     const fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
     if (!fileUrl) return;
 
-    setLocalStats(prev => ({
-      ...prev,
-      [resource._id]: { ...prev[resource._id], views: (resource.views || 0) + 1 }
-    }));
     setActiveViewId(resource._id);
+    try {
+      await logView(resource._id).unwrap();
+    } catch (error) {
+      console.log('Erreur log vue', error);
+    }
 
     const format = resource.format?.toLowerCase();
     const supportedFormats = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg'];
@@ -173,11 +137,23 @@ export default function RessourcesScreen({ navigation }) {
       const ext = resource.format || 'pdf';
       const fileName = `${safeTitle}.${ext}`;
       
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      let finalUri = null;
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          finalUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/octet-stream');
+        } else {
+          setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
+          return;
+        }
+      }
+
+      const cacheUri = `${FileSystem.cacheDirectory}${fileName}`;
 
       const downloadResumable = FileSystem.createDownloadResumable(
         fileUrl,
-        fileUri,
+        cacheUri,
         {},
         (downloadProgress) => {
           const progress = (downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100;
@@ -191,19 +167,16 @@ export default function RessourcesScreen({ navigation }) {
       const result = await downloadResumable.downloadAsync();
 
       if (result && result.uri) {
+        if (Platform.OS === 'android' && finalUri) {
+          const fileString = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64 });
+          await FileSystem.writeAsStringAsync(finalUri, fileString, { encoding: FileSystem.EncodingType.Base64 });
+        } else if (Platform.OS === 'ios' && await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(result.uri, { dialogTitle: 'Enregistrer le document' });
+        }
+
         setDownloads(prev => ({ ...prev, [resource._id]: { status: 'success', progress: 100 } }));
-        setLocalStats(prev => ({
-          ...prev,
-          [resource._id]: { ...prev[resource._id], downloads: (resource.downloads || 0) + 1 }
-        }));
         await logDownload(resource._id).unwrap();
 
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri, {
-            mimeType: 'application/octet-stream',
-            dialogTitle: 'Enregistrer le document',
-          });
-        }
         setTimeout(() => {
           setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
         }, 3000);
@@ -215,15 +188,9 @@ export default function RessourcesScreen({ navigation }) {
   };
 
   const renderItem = ({ item }) => {
-    const optimisticResource = {
-      ...item,
-      views: getOptimisticStats(item._id, 'views', item.views),
-      downloads: getOptimisticStats(item._id, 'downloads', item.downloads)
-    };
-
     return (
       <ResourceCard
-        resource={optimisticResource}
+        resource={item}
         downloadState={downloads[item._id]}
         onView={handleViewAction}
         onDownloadAction={handleDownloadAction}
@@ -237,7 +204,7 @@ export default function RessourcesScreen({ navigation }) {
       <AnimatedHeader scrollY={scrollY} title="Ressources" navigation={navigation} />
       <SmartRefreshOverlay isVisible={isSmartRefreshing} />
 
-      {isLoading ? (
+      {isLoading && resources.length === 0 ? (
         <Animated.FlatList
           data={[1, 2, 3]}
           keyExtractor={(item) => item.toString()}

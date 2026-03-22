@@ -1,26 +1,43 @@
-import React from 'react';
-import { View, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator, Image, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import BottomSheet from '../ui/BottomSheet';
 import { useAppTheme } from '../../theme/theme';
 
 export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
   const theme = useAppTheme();
+  const [retryKey, setRetryKey] = useState(1);
   
+  useEffect(() => {
+    if (visible) {
+      setRetryKey(1);
+    }
+  }, [visible]);
+
   if (!resourceUrl) return null;
 
   const secureUrl = resourceUrl.replace('http://', 'https://');
   const isImage = secureUrl.match(/\.(jpeg|jpg|png|gif)$/i) || secureUrl.includes('image');
   const isOfficeDoc = secureUrl.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+  const isPdf = secureUrl.match(/\.pdf$/i);
   
   let viewerUrl = secureUrl;
   if (!isImage) {
     if (isOfficeDoc) {
       viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(secureUrl)}`;
+    } else if (isPdf && Platform.OS === 'ios') {
+      viewerUrl = secureUrl;
     } else {
       viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(secureUrl)}`;
     }
   }
+
+  const handleWebViewError = () => {
+    if (!isPdf || Platform.OS === 'ios') return;
+    setTimeout(() => {
+      setRetryKey(prev => prev + 1);
+    }, 1500);
+  };
 
   return (
     <BottomSheet isVisible={visible} onClose={onClose}>
@@ -33,6 +50,7 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
           />
         ) : (
           <WebView
+            key={retryKey}
             source={{ uri: viewerUrl }}
             style={styles.webview}
             startInLoadingState={true}
@@ -47,10 +65,8 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
                 <ActivityIndicator size="large" color={theme.colors.primary} />
               </View>
             )}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.log('Erreur silencieuse WebView: ', nativeEvent);
-            }}
+            onError={handleWebViewError}
+            onHttpError={handleWebViewError}
           />
         )}
       </View>

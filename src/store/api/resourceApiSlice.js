@@ -33,14 +33,29 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
           
           const handleNewResource = (newResource) => {
             updateCachedData((draft) => {
-              draft.unshift(newResource);
+              const exists = draft.find(r => r._id === newResource._id);
+              if (!exists) {
+                draft.unshift(newResource);
+              }
+            });
+          };
+
+          const handleStatsUpdated = (data) => {
+            updateCachedData((draft) => {
+              const resource = draft.find(r => r._id === data.id);
+              if (resource) {
+                if (data.views !== undefined) resource.views = data.views;
+                if (data.downloads !== undefined) resource.downloads = data.downloads;
+              }
             });
           };
           
-          socket.on('new_resource', handleNewResource);
+          socket.on('newResource', handleNewResource);
+          socket.on('resourceStatsUpdated', handleStatsUpdated);
           
           await cacheEntryRemoved;
-          socket.off('new_resource', handleNewResource);
+          socket.off('newResource', handleNewResource);
+          socket.off('resourceStatsUpdated', handleStatsUpdated);
         } catch (error) {
           console.log('Erreur synchronisation socket ressources', error);
         }
@@ -81,9 +96,12 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: [], 
     }),
     
+    logView: builder.mutation({
+      query: (id) => ({ url: `/v1/resources/${id}/view`, method: 'PATCH' }),
+    }),
+
     logDownload: builder.mutation({
-      query: (id) => ({ url: `/v1/resources/${id}/download`, method: 'POST' }),
-      transformResponse: (response) => response.data,
+      query: (id) => ({ url: `/v1/resources/${id}/download`, method: 'PATCH' }),
     }),
     
     deleteResource: builder.mutation({
@@ -115,6 +133,7 @@ export const {
   useGetResourcesQuery,
   useGetResourceQuery,
   useUploadResourceMutation,
+  useLogViewMutation,
   useLogDownloadMutation,
   useDeleteResourceMutation,
   useUpdateResourceMutation,
