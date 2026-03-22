@@ -76,7 +76,7 @@ export default function LandingPage() {
         {/* CENTER */}
         <View style={styles.centerContent}>
           <Animated.View entering={FadeInDown.duration(1200).delay(300)} style={styles.brandContainer}>
-            <Text style={[styles.title, { color: theme.colors.primary }]}>LokoDrive</Text>
+            <Text style={[styles.title, { color: theme.colors.primary }]}>LokoNet</Text>
             <Text style={[styles.subtitle, { color: theme.colors.text }]}>
               La plateforme ultime pour connecter et faire grandir la communauté étudiante.
             </Text>
@@ -84,7 +84,7 @@ export default function LandingPage() {
 
           <Animated.View entering={FadeInDown.duration(1200).delay(500)} style={styles.descriptionContainer}>
             <Text style={[styles.description, { color: theme.colors.textMuted }]}>
-              Née d’une volonté de centraliser l’entraide, LokoDrive est bien plus qu’une simple application.
+              Née d’une volonté de centraliser l’entraide, LokoNet est bien plus qu’une simple application.
               C’est un espace collaboratif, conçu par des étudiants, pour des étudiants.
             </Text>
           </Animated.View>
@@ -140,7 +140,7 @@ export default function LandingPage() {
           </View>
           
           <Text style={[styles.copyright, { color: theme.colors.textDisabled }]}>
-            © {currentYear} LokoDrive. Tous droits réservés.
+            © {currentYear} LokoNet. Tous droits réservés.
           </Text>
         </Animated.View>
 

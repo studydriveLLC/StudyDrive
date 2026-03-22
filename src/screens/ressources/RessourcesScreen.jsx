@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, Platform } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system';
+// Importation corrigée pour le SDK 54 d'Expo
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
+import { useSelector } from 'react-redux';
 import AnimatedHeader from '../../components/navigation/AnimatedHeader';
 import SkeletonResourceCard from '../../components/ressources/SkeletonResourceCard';
 import ResourceCard from '../../components/ressources/ResourceCard';
@@ -28,6 +30,8 @@ export default function RessourcesScreen({ navigation }) {
   const scrollY = useSharedValue(0);
   const listRef = useRef(null);
   const isFetchingRef = useRef(false);
+
+  const token = useSelector((state) => state.auth?.token);
 
   const [downloads, setDownloads] = useState({});
   const [activeOptionsResource, setActiveOptionsResource] = useState(null);
@@ -98,8 +102,13 @@ export default function RessourcesScreen({ navigation }) {
   });
 
   const handleViewAction = async (resource) => {
-    const fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
+    let fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
     if (!fileUrl) return;
+
+    if (!fileUrl.startsWith('http')) {
+      const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
+      fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
+    }
 
     setActiveViewId(resource._id);
     try {
@@ -126,35 +135,33 @@ export default function RessourcesScreen({ navigation }) {
   };
 
   const handleDownloadAction = async (resource) => {
-    const fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
+    let fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
     if (!fileUrl) return;
+    
     if (downloads[resource._id]?.status === 'downloading') return;
+
+    if (!fileUrl.startsWith('http')) {
+      const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
+      fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
+    }
 
     setDownloads(prev => ({ ...prev, [resource._id]: { status: 'downloading', progress: 0 } }));
 
     try {
-      const safeTitle = (resource.title || 'Document_LokoDrive').replace(/[^a-zA-Z0-9]/g, '_');
+      const safeTitle = (resource.title || 'Document_LokoNet').replace(/[^a-zA-Z0-9]/g, '_');
       const ext = resource.format || 'pdf';
       const fileName = `${safeTitle}.${ext}`;
       
-      let finalUri = null;
-
-      if (Platform.OS === 'android') {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          finalUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/octet-stream');
-        } else {
-          setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
-          return;
-        }
-      }
-
-      const cacheUri = `${FileSystem.cacheDirectory}${fileName}`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
       const downloadResumable = FileSystem.createDownloadResumable(
         fileUrl,
-        cacheUri,
-        {},
+        fileUri,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        },
         (downloadProgress) => {
           const progress = (downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100;
           setDownloads(prev => ({
@@ -167,11 +174,16 @@ export default function RessourcesScreen({ navigation }) {
       const result = await downloadResumable.downloadAsync();
 
       if (result && result.uri) {
-        if (Platform.OS === 'android' && finalUri) {
-          const fileString = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64 });
-          await FileSystem.writeAsStringAsync(finalUri, fileString, { encoding: FileSystem.EncodingType.Base64 });
-        } else if (Platform.OS === 'ios' && await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri, { dialogTitle: 'Enregistrer le document' });
+        if (result.status && result.status >= 400) {
+          throw new Error(`Erreur serveur HTTP ${result.status}`);
+        }
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(result.uri, { 
+            dialogTitle: 'Enregistrer le document',
+            UTI: 'public.item', 
+            mimeType: 'application/octet-stream'
+          });
         }
 
         setDownloads(prev => ({ ...prev, [resource._id]: { status: 'success', progress: 100 } }));

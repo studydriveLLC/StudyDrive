@@ -22,7 +22,7 @@ export default function ShareModal({ visible, onClose, onShareInternal, onShareE
             <Repeat color={theme.colors.primaryDark} size={20} />
           </View>
           <View style={styles.optionTextContainer}>
-            <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Republier sur LokoDrive</Text>
+            <Text style={[styles.optionTitle, { color: theme.colors.text }]}>Republier sur LokoNet</Text>
             <Text style={[styles.optionSub, { color: theme.colors.textMuted }]}>
               Partager sur votre fil d'actualité
             </Text>

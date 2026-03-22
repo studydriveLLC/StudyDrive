@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "LokoDrive",
-    "slug": "lokodrive",
+    "name": "LokoNet",
+    "slug": "LokoNet",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lokodrive.app",
+      "bundleIdentifier": "com.LokoNet.app",
       "userInterfaceStyle": "automatic"
     },
     "android": {
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.lokodrive.app",
+      "package": "com.LokoNet.app",
       "userInterfaceStyle": "automatic",
       "softwareKeyboardLayoutMode": "resize"
     },

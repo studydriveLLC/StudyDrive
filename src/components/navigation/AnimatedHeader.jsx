@@ -35,7 +35,7 @@ export default function AnimatedHeader({ scrollY }) {
       <View style={[styles.topRow, { height: 60 }]}>
         <View style={styles.leftSection}>
           <Animated.View style={[styles.logoContainer, animations.logoTranslateX, animations.logoOpacity]}>
-            <Text style={[styles.logoText, { color: theme.colors.surface }]}>LokoDrive</Text>
+            <Text style={[styles.logoText, { color: theme.colors.surface }]}>LokoNet</Text>
           </Animated.View>
 
           <Animated.View style={[styles.bellContainerAnimated, animations.bellTranslateX, animations.bellOpacity]}>

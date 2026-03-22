@@ -33,7 +33,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
           
           const handleNewResource = (newResource) => {
             updateCachedData((draft) => {
-              const exists = draft.find(r => r._id === newResource._id);
+              const exists = draft.find(r => String(r._id) === String(newResource._id));
               if (!exists) {
                 draft.unshift(newResource);
               }
@@ -42,7 +42,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
 
           const handleStatsUpdated = (data) => {
             updateCachedData((draft) => {
-              const resource = draft.find(r => r._id === data.id);
+              const resource = draft.find(r => String(r._id) === String(data.id));
               if (resource) {
                 if (data.views !== undefined) resource.views = data.views;
                 if (data.downloads !== undefined) resource.downloads = data.downloads;

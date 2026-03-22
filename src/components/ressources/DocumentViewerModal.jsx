@@ -17,9 +17,13 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
   if (!resourceUrl) return null;
 
   const secureUrl = resourceUrl.replace('http://', 'https://');
-  const isImage = secureUrl.match(/\.(jpeg|jpg|png|gif)$/i) || secureUrl.includes('image');
-  const isOfficeDoc = secureUrl.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
-  const isPdf = secureUrl.match(/\.pdf$/i);
+  
+  // Isoler le chemin du fichier sans les parametres d'URL pour valider l'extension
+  const urlWithoutParams = secureUrl.split('?')[0];
+
+  const isImage = urlWithoutParams.match(/\.(jpeg|jpg|png|gif)$/i) || secureUrl.includes('image');
+  const isOfficeDoc = urlWithoutParams.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+  const isPdf = urlWithoutParams.match(/\.pdf$/i);
   
   let viewerUrl = secureUrl;
   if (!isImage) {
@@ -28,7 +32,8 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
     } else if (isPdf && Platform.OS === 'ios') {
       viewerUrl = secureUrl;
     } else {
-      viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(secureUrl)}`;
+      // Injection de retryKey pour forcer Google a eviter le cache au besoin
+      viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(secureUrl)}&retry=${retryKey}`;
     }
   }
 
