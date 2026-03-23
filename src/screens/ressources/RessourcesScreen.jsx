@@ -112,19 +112,17 @@ export default function RessourcesScreen({ navigation }) {
       
       isFetchingRef.current = true;
       setIsSmartRefreshing(true);
+
+      if (listRef.current) {
+        if (typeof listRef.current.scrollToOffset === 'function') {
+          listRef.current.scrollToOffset({ offset: 0, animated: true });
+        } else if (listRef.current.getNode && typeof listRef.current.getNode().scrollToOffset === 'function') {
+          listRef.current.getNode().scrollToOffset({ offset: 0, animated: true });
+        }
+      }
       
       try {
         await refetch();
-        
-        if (listRef.current) {
-          setTimeout(() => {
-            if (typeof listRef.current.scrollToOffset === 'function') {
-              listRef.current.scrollToOffset({ offset: 0, animated: true });
-            } else if (listRef.current.getNode && typeof listRef.current.getNode().scrollToOffset === 'function') {
-              listRef.current.getNode().scrollToOffset({ offset: 0, animated: true });
-            }
-          }, 100);
-        }
       } catch (error) {
         console.log('Erreur silencieuse refetch', error);
       } finally {
@@ -178,9 +176,10 @@ export default function RessourcesScreen({ navigation }) {
     
     if (downloads[resource._id]?.status === 'downloading') return;
 
-    const isLocal = !fileUrl.startsWith('http');
-    if (isLocal) {
-      const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
+    const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
+    const isLocalPath = !fileUrl.startsWith('http');
+    
+    if (isLocalPath) {
       fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
     }
 
@@ -193,7 +192,9 @@ export default function RessourcesScreen({ navigation }) {
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
       const options = {};
-      if (isLocal || fileUrl.includes(process.env.EXPO_PUBLIC_API_URL)) {
+      const isOurBackend = fileUrl.includes(rawBaseUrl) || fileUrl.includes('192.168.') || fileUrl.includes('localhost');
+      
+      if (isOurBackend) {
         options.headers = { Authorization: `Bearer ${token}` };
       }
 

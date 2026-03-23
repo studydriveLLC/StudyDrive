@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Image, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import BottomSheet from '../ui/BottomSheet';
 import { useAppTheme } from '../../theme/theme';
@@ -18,14 +18,21 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
 
   if (!resourceUrl) return null;
 
-  const secureUrl = resourceUrl.replace('http://', 'https://');
-  const urlWithoutParams = secureUrl.split('?')[0];
+  const isLocalUrl = resourceUrl.includes('192.168.') || resourceUrl.includes('localhost');
+  const finalUrl = isLocalUrl ? resourceUrl : resourceUrl.replace('http://', 'https://');
+  const urlWithoutParams = finalUrl.split('?')[0];
 
-  const isImage = urlWithoutParams.match(/\.(jpeg|jpg|png|gif)$/i) || secureUrl.includes('image');
+  const isImage = urlWithoutParams.match(/\.(jpeg|jpg|png|gif)$/i) || finalUrl.includes('image') || finalUrl.includes('res.cloudinary.com/image');
   
-  let viewerUrl = secureUrl;
+  let viewerUrl = finalUrl;
+  let isLocalDoc = false;
+
   if (!isImage) {
-    viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(secureUrl)}`;
+    if (isLocalUrl) {
+      isLocalDoc = true;
+    } else {
+      viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(finalUrl)}`;
+    }
   }
 
   const handleWebViewError = () => {
@@ -45,6 +52,15 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
             onLoadStart={() => setIsLoading(true)}
             onLoadEnd={() => setIsLoading(false)}
           />
+        ) : isLocalDoc ? (
+          <View style={[styles.localDocContainer, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.localDocText, { color: theme.colors.text }]}>
+              Apercu indisponible pour les documents en developpement local.
+            </Text>
+            <Text style={[styles.localDocSubtext, { color: theme.colors.textMuted }]}>
+              Veuillez utiliser le bouton de telechargement.
+            </Text>
+          </View>
         ) : (
           <WebView
             key={retryKey}
@@ -65,7 +81,7 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
           />
         )}
         
-        {isLoading && (
+        {isLoading && !isLocalDoc && (
           <View style={[styles.loader, { backgroundColor: theme.colors.surface }]}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
@@ -99,5 +115,21 @@ const styles = StyleSheet.create({
     bottom: 0, 
     justifyContent: 'center', 
     alignItems: 'center'
+  },
+  localDocContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  localDocText: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  localDocSubtext: {
+    fontSize: 14,
+    textAlign: 'center'
   }
 });
