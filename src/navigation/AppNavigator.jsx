@@ -30,7 +30,6 @@ const fastSpringConfig = {
   },
 };
 
-// Configuration de l'animation Fade In immersive pour le Menu
 const fadeTimingConfig = {
   animation: 'timing',
   config: { duration: 250 },
@@ -52,19 +51,23 @@ export default function AppNavigator() {
       try {
         const token = await getToken('accessToken');
         const userDataStr = await getToken('userData');
+        // Correction Critique : Recuperation du refreshToken pour eviter le crash silencieux
+        const refreshToken = await getToken('refreshToken');
 
         if (token && userDataStr) {
           const savedUser = JSON.parse(userDataStr);
           
-          // 1. Connexion immediate grace au cache local (Plus aucun fetch manuel !)
-          dispatch(setCredentials({ user: savedUser, token }));
+          dispatch(setCredentials({ 
+            user: savedUser, 
+            token, 
+            refreshToken // Injection dans le store des le demarrage
+          }));
         } else {
-          // Aucun token ou utilisateur en memoire
-          dispatch(setCredentials({ user: null, token: null }));
+          dispatch(setCredentials({ user: null, token: null, refreshToken: null }));
         }
       } catch (error) {
         console.error('Erreur lecture SecureStore', error);
-        dispatch(setCredentials({ user: null, token: null }));
+        dispatch(setCredentials({ user: null, token: null, refreshToken: null }));
       } finally {
         dispatch(setAuthLoading(false));
       }
@@ -86,7 +89,6 @@ export default function AppNavigator() {
       <View style={[styles.mainWrapper, { backgroundColor: theme.colors.background }]}>
         <TopInsetBox />
         
-        {/* Le Gardien veille en silence */}
         <TokenGuardian />
         
         <Stack.Navigator
@@ -114,7 +116,6 @@ export default function AppNavigator() {
                 options={{
                   gestureEnabled: false,
                   cardStyle: { backgroundColor: theme.colors.background },
-                  // On ecrase le comportement global pour le Menu avec notre Fade
                   transitionSpec: {
                     open: fadeTimingConfig,
                     close: fadeTimingConfig,

@@ -1,11 +1,11 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { Mutex } from 'async-mutex';
 import { Platform } from 'react-native';
-import { getToken, saveToken, deleteToken } from '../secureStoreAdapter';
-import { setCredentials, logout, setTokenRefreshing } from './authSlice';
+import { getToken } from '../secureStoreAdapter';
+import { setCredentials, logout, setTokenRefreshing } from '../slices/authSlice';
 
 const mutex = new Mutex();
-const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL;
+const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || '';
 
 if (!rawBaseUrl && __DEV__) {
   console.warn("ATTENTION: EXPO_PUBLIC_API_URL n'est pas defini dans le fichier .env !");
@@ -54,15 +54,12 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
 
   const isSleepingOrOffline = wasSuspended || isBrowserHidden || isBrowserOffline;
 
-  // Identification de la route pour appliquer le Fail-Fast
   let requestUrl = typeof args === 'string' ? args : args?.url || '';
   const isAuthEndpoint = requestUrl.includes('/login') || requestUrl.includes('/register') || requestUrl.includes('/refresh');
 
-  // BOUCLE DE REESSAI RESILIENTE (Max 3 tentatives)
   let retries = 0;
   const maxRetries = 3;
 
-  // CORRECTION MAJEURE : On exclut strictement (!isAuthEndpoint) les routes d'auth de la boucle de retry
   while (
     !isSleepingOrOffline && 
     !isAuthEndpoint && 
@@ -78,7 +75,6 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
     result = await baseQuery(args, api, extraOptions);
   }
 
-  // LOGIQUE DE REFRESH TOKEN
   if (result.error && result.error.status === 401 && !isAuthEndpoint) {
     if (!mutex.isLocked()) {
       const release = await mutex.acquire();
@@ -114,22 +110,22 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
         if (refreshResult.data?.status === 'success') {
           const newToken = refreshResult.data.data.accessToken;
           const newRefreshToken = refreshResult.data.data.refreshToken || currentRefreshToken;
-          const user = api.getState().auth?.user;
 
+          // Pas besoin de passer le 'user' ici, authSlice s'en charge en l'ignorant si undefined
           api.dispatch(setCredentials({ 
-            user, 
             token: newToken, 
             refreshToken: newRefreshToken 
           }));
           
           result = await baseQuery(args, api, extraOptions);
-        } else {
-          console.warn("[API] Echec du refresh token. Déconnexion.");
+        } else if (refreshResult.error && refreshResult.error.status !== 'FETCH_ERROR' && refreshResult.error.status !== 'TIMEOUT_ERROR') {
+          // Securite Absolue : On ne deconnecte QUE si le serveur a rejete le token (4xx, 5xx).
+          // Si c'est un FETCH_ERROR (perte de connexion pendant le rafraichissement), on tolere.
+          console.warn("[API] Le serveur a rejete le refresh token. Déconnexion.");
           api.dispatch(logout());
         }
       } catch (error) {
         console.error('[API] Echec critique lors du rafraichissement', error);
-        api.dispatch(logout());
       } finally {
         api.dispatch(setTokenRefreshing(false));
         release();
@@ -147,5 +143,5 @@ export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
   tagTypes: ['User', 'Post', 'Workspace', 'Notification', 'Resource'],
-  endpoints: (builder) => ({}),
+  endpoints: () => ({}),
 });
