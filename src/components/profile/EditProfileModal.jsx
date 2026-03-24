@@ -1,4 +1,3 @@
-// src/components/profile/EditProfileModal.jsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { Camera, Lock, User, Phone } from 'lucide-react-native';
@@ -93,8 +92,8 @@ export default function EditProfileModal({ visible, onClose, currentUser, onSave
     if (newPassword.length < 6) return setErrorMsg("Le nouveau mot de passe est trop court.");
 
     try {
-      // CORRECTION ICI : Remplacement de currentPassword par passwordCurrent
-      await updatePassword({ passwordCurrent: currentPassword, password: newPassword, passwordConfirm: confirmPassword }).unwrap();
+      // CORRECTION ICI : Le backend attend l'étiquette exacte "currentPassword"
+      await updatePassword({ currentPassword: currentPassword, password: newPassword }).unwrap();
       dispatch(showSuccessToast({ message: "Mot de passe mis a jour avec succes" }));
       setCurrentPassword('');
       setNewPassword('');
