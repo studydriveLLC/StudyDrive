@@ -1,23 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, Platform, AppState } from 'react-native';
+import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, Platform, AppState, ActivityIndicator } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { useSelector, useDispatch } from 'react-redux';
+import { Trash2 } from 'lucide-react-native';
+
 import AnimatedHeader from '../../components/navigation/AnimatedHeader';
 import SkeletonResourceCard from '../../components/ressources/SkeletonResourceCard';
 import ResourceCard from '../../components/ressources/ResourceCard';
 import ResourceOptionsModal from '../../components/ressources/ResourceOptionsModal';
 import DocumentViewerModal from '../../components/ressources/DocumentViewerModal';
+import EditResourceModal from '../../components/ressources/EditResourceModal';
+import ReportResourceModal from '../../components/ressources/ReportResourceModal';
+import BottomSheet from '../../components/ui/BottomSheet';
 import SmartRefreshOverlay from '../../components/ui/SmartRefreshOverlay';
 import { useAppTheme } from '../../theme/theme';
 import socketService from '../../services/socketService';
 import { 
   resourceApiSlice, useGetResourcesQuery, useDeleteResourceMutation, 
   useLogDownloadMutation, useLogViewMutation, useGetResourceQuery, 
-  useToggleFavoriteMutation, useReportResourceMutation 
+  useToggleFavoriteMutation 
 } from '../../store/api/resourceApiSlice';
 
 export default function RessourcesScreen({ navigation }) {
@@ -41,6 +46,11 @@ export default function RessourcesScreen({ navigation }) {
   const [isSmartRefreshing, setIsSmartRefreshing] = useState(false);
   const [activeViewId, setActiveViewId] = useState(null);
 
+  // Nouveaux etats pour les modales d'action
+  const [editingResource, setEditingResource] = useState(null);
+  const [reportingResource, setReportingResource] = useState(null);
+  const [resourceToDelete, setResourceToDelete] = useState(null);
+
   useEffect(() => {
     queryArgsRef.current = queryArgs;
   }, [queryArgs]);
@@ -50,9 +60,8 @@ export default function RessourcesScreen({ navigation }) {
   
   const [logDownload] = useLogDownloadMutation();
   const [logView] = useLogViewMutation();
-  const [deleteResource] = useDeleteResourceMutation();
+  const [deleteResource, { isLoading: isDeleting }] = useDeleteResourceMutation();
   const [toggleFavorite] = useToggleFavoriteMutation();
-  const [reportResource] = useReportResourceMutation();
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -67,9 +76,7 @@ export default function RessourcesScreen({ navigation }) {
         socketService.forceReconnect();
       }
     });
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -142,7 +149,6 @@ export default function RessourcesScreen({ navigation }) {
     }
 
     setActiveViewId(resource._id);
-    
     logView(resource._id).unwrap().catch(() => {});
 
     const format = resource.format?.toLowerCase();
@@ -156,9 +162,7 @@ export default function RessourcesScreen({ navigation }) {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
           toolbarColor: theme.colors.background,
         });
-      } catch (error) {
-        console.log('Erreur ouverture WebBrowser:', error);
-      }
+      } catch (error) {}
     }
   };
 
@@ -202,12 +206,20 @@ export default function RessourcesScreen({ navigation }) {
       }
 
       setDownloads(prev => ({ ...prev, [resource._id]: { status: 'success', progress: 100 } }));
-      
       logDownload(resource._id).unwrap().catch(() => {});
-      
       setTimeout(() => setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } })), 3000);
     } catch (error) {
       setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!resourceToDelete) return;
+    try {
+      await deleteResource(resourceToDelete._id).unwrap();
+      setResourceToDelete(null);
+    } catch (error) {
+      console.log('Erreur de suppression:', error);
     }
   };
 
@@ -255,6 +267,7 @@ export default function RessourcesScreen({ navigation }) {
         />
       )}
 
+      {/* Les Modales d'Action */}
       <ResourceOptionsModal
         visible={!!activeOptionsResource}
         resource={activeOptionsResource}
@@ -269,15 +282,30 @@ export default function RessourcesScreen({ navigation }) {
           try { await toggleFavorite(activeOptionsResource._id).unwrap(); } catch (e) {}
           setActiveOptionsResource(null);
         }}
-        onEdit={() => setActiveOptionsResource(null)}
-        onDelete={async () => {
-          try { await deleteResource(activeOptionsResource._id).unwrap(); } catch (e) {}
+        onEdit={() => {
+          setEditingResource(activeOptionsResource);
           setActiveOptionsResource(null);
         }}
-        onReport={async () => {
-          try { await reportResource(activeOptionsResource._id).unwrap(); } catch (e) {}
+        onDelete={() => {
+          setResourceToDelete(activeOptionsResource);
           setActiveOptionsResource(null);
         }}
+        onReport={() => {
+          setReportingResource(activeOptionsResource);
+          setActiveOptionsResource(null);
+        }}
+      />
+
+      <EditResourceModal
+        visible={!!editingResource}
+        resource={editingResource}
+        onClose={() => setEditingResource(null)}
+      />
+
+      <ReportResourceModal
+        visible={!!reportingResource}
+        resource={reportingResource}
+        onClose={() => setReportingResource(null)}
       />
 
       <DocumentViewerModal
@@ -286,6 +314,39 @@ export default function RessourcesScreen({ navigation }) {
         resource={activeDocument}
         token={token}
       />
+
+      {/* Confirmation de Suppression (Design System strict, sans alert natif) */}
+      <BottomSheet isVisible={!!resourceToDelete} onClose={() => setResourceToDelete(null)}>
+        <View style={styles.deleteConfirmContainer}>
+          <View style={styles.deleteIconBox}>
+            <Trash2 color={theme.colors.error} size={32} />
+          </View>
+          <Text style={[styles.deleteConfirmTitle, { color: theme.colors.text }]}>Supprimer ce document ?</Text>
+          <Text style={[styles.deleteConfirmText, { color: theme.colors.textMuted }]}>
+            Cette action est irreversible. Le document "{resourceToDelete?.title}" sera definitivement efface du serveur.
+          </Text>
+          <View style={styles.deleteConfirmActions}>
+            <Pressable 
+              style={[styles.cancelBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} 
+              onPress={() => setResourceToDelete(null)}
+              disabled={isDeleting}
+            >
+              <Text style={[styles.cancelBtnText, { color: theme.colors.text }]}>Annuler</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.confirmDeleteBtn, { backgroundColor: theme.colors.error }]} 
+              onPress={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.confirmDeleteText}>Oui, supprimer</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </BottomSheet>
     </View> 
   );
 }
@@ -296,4 +357,15 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, textAlign: 'center', marginBottom: 20 },
   retryButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20 },
   retryText: { fontSize: 14, fontWeight: '700' },
+  
+  // Styles pour la modale de suppression interne
+  deleteConfirmContainer: { paddingHorizontal: 24, paddingBottom: 30, paddingTop: 10, alignItems: 'center' },
+  deleteIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(235, 87, 87, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  deleteConfirmTitle: { fontSize: 20, fontWeight: '800', marginBottom: 12, textAlign: 'center' },
+  deleteConfirmText: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  deleteConfirmActions: { flexDirection: 'row', gap: 12, width: '100%' },
+  cancelBtn: { flex: 1, height: 50, borderRadius: 25, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  cancelBtnText: { fontSize: 15, fontWeight: '700' },
+  confirmDeleteBtn: { flex: 1, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+  confirmDeleteText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' }
 });

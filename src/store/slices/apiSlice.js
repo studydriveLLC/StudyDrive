@@ -111,16 +111,17 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
           const newToken = refreshResult.data.data.accessToken;
           const newRefreshToken = refreshResult.data.data.refreshToken || currentRefreshToken;
 
-          // Pas besoin de passer le 'user' ici, authSlice s'en charge en l'ignorant si undefined
           api.dispatch(setCredentials({ 
             token: newToken, 
             refreshToken: newRefreshToken 
           }));
           
+          // LA CORRECTION VITALE : On ressuscite le Socket immediatement
+          const socketService = require('../../services/socketService').default;
+          socketService.updateToken(newToken);
+
           result = await baseQuery(args, api, extraOptions);
         } else if (refreshResult.error && refreshResult.error.status !== 'FETCH_ERROR' && refreshResult.error.status !== 'TIMEOUT_ERROR') {
-          // Securite Absolue : On ne deconnecte QUE si le serveur a rejete le token (4xx, 5xx).
-          // Si c'est un FETCH_ERROR (perte de connexion pendant le rafraichissement), on tolere.
           console.warn("[API] Le serveur a rejete le refresh token. Déconnexion.");
           api.dispatch(logout());
         }

@@ -41,7 +41,16 @@ const socketService = {
       }
     });
 
-    socket.on('connect_error', (err) => console.log('[Socket] Erreur de connexion:', err.message));
+    socket.on('connect_error', (err) => {
+      console.log('[Socket] Erreur de connexion:', err.message);
+      
+      // Auto-reparation : Si le token est mort, on force Redux a en chercher un nouveau
+      if (err.message === 'Token invalide ou expire' || err.message === 'Authentification requise') {
+         const { store } = require('../store/store');
+         const { forceSilentRefresh } = require('../store/slices/authSlice');
+         if (store) store.dispatch(forceSilentRefresh());
+      }
+    });
     
     return socket;
   },
@@ -58,6 +67,7 @@ const socketService = {
     if (socket) {
       socket.auth = { token };
       socket.disconnect().connect();
+      console.log('[Socket] Token mis a jour et reconnexion forcee');
     }
   },
 

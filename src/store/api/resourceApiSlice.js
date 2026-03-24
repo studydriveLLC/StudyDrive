@@ -113,7 +113,11 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
     }),
     
     reportResource: builder.mutation({
-      query: (id) => ({ url: `/v1/resources/${id}/report`, method: 'POST' }),
+      query: ({ id, reason }) => ({ 
+        url: `/v1/resources/${id}/signal`, 
+        method: 'POST',
+        body: { reason }
+      }),
     }),
   }),
   overrideExisting: true,
