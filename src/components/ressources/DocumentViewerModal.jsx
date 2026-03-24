@@ -6,7 +6,8 @@ import { useAppTheme } from '../../theme/theme';
 
 export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
   const theme = useAppTheme();
-  const [retryKey, setRetryKey] = useState(1);
+  // On utilise un timestamp pour le retryKey. Il servira aussi de Cache-Buster.
+  const [retryKey, setRetryKey] = useState(Date.now());
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -14,9 +15,11 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
       setRetryKey(Date.now());
       setIsLoading(true);
       
+      // On passe le timeout à 8 secondes, car l'API de Microsoft ou Google 
+      // peut prendre un peu de temps pour générer le premier aperçu.
       const timer = setTimeout(() => {
         setIsLoading(false);
-      }, 5000);
+      }, 8000);
       
       return () => clearTimeout(timer);
     }
@@ -33,11 +36,30 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
   let viewerUrl = finalUrl;
   let isLocalDoc = false;
 
+  // STRATÉGIE 1 : Le Cache Buster
+  // On ajoute un paramètre unique à l'URL cible pour forcer Google et iOS à ignorer leur cache 401 précédent
+  const targetUrl = finalUrl + (finalUrl.includes('?') ? '&cb=' : '?cb=') + retryKey;
+  const encodedUrl = encodeURIComponent(targetUrl);
+
   if (!isImage) {
     if (isLocalUrl) {
       isLocalDoc = true;
     } else if (Platform.OS === 'android') {
-      viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(finalUrl)}&retry=${retryKey}`;
+      
+      // STRATÉGIE 2 : Le Routeur de Format
+      const isOfficeDoc = urlWithoutParams.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+      
+      if (isOfficeDoc) {
+        // Microsoft Office Viewer : Extrêmement stable pour les formats Office
+        viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
+      } else {
+        // Google Docs Viewer : Excellent pour les PDF
+        viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodedUrl}`;
+      }
+    } else {
+      // Sur iOS, le moteur WebKit lit parfaitement les PDF et DOCX nativement.
+      // Mais on utilise "targetUrl" pour bénéficier du Cache-Buster et éviter l'écran blanc.
+      viewerUrl = targetUrl;
     }
   }
 
@@ -47,19 +69,31 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
     }, 1500);
   };
 
+  // STRATÉGIE 3 : Détection d'erreur renforcée
   const injectedJavaScript = `
     setTimeout(function() {
-      if (document.body && document.body.innerText.trim().length === 0 && document.body.children.length === 0) {
-        window.ReactNativeWebView.postMessage('BLANK_PAGE');
-      }
-    }, 2500);
+      try {
+        var body = document.body;
+        if (!body) return;
+        
+        // 1. Détection de page 100% blanche
+        var isEmpty = body.innerText.trim().length === 0 && body.children.length === 0;
+        
+        // 2. Détection des classes CSS d'erreur typiques de Google Docs Viewer
+        var isGoogleError = document.querySelector('.ndfHFb-c4YZDc-Wrql6b') || document.querySelector('.ndfHFb-c4YZDc-GSQQnc-LgbsSe');
+        
+        if (isEmpty || isGoogleError) {
+          window.ReactNativeWebView.postMessage('BLANK_PAGE');
+        }
+      } catch(e) {}
+    }, 3500);
     true;
   `;
 
   const onMessage = (event) => {
     if (event.nativeEvent.data === 'BLANK_PAGE') {
       setIsLoading(true);
-      setRetryKey(Date.now());
+      setRetryKey(Date.now()); // Déclenche un nouveau rendu ET génère un nouveau Cache-Buster
     }
   };
 
@@ -109,6 +143,9 @@ export default function DocumentViewerModal({ visible, onClose, resourceUrl }) {
         {isLoading && !isLocalDoc && (
           <View style={[styles.loader, { backgroundColor: theme.colors.surface }]}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
+              Ouverture du document...
+            </Text>
           </View>
         )}
       </View>
@@ -140,6 +177,11 @@ const styles = StyleSheet.create({
     bottom: 0, 
     justifyContent: 'center', 
     alignItems: 'center'
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '700'
   },
   localDocContainer: {
     flex: 1,

@@ -54,13 +54,28 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
 
   const isSleepingOrOffline = wasSuspended || isBrowserHidden || isBrowserOffline;
 
-  if (!isSleepingOrOffline && result.error && (result.error.status === 'FETCH_ERROR' || result.error.status === 'TIMEOUT_ERROR')) {
+  // BOUCLE DE REESSAI RESILIENTE (Max 3 tentatives)
+  let retries = 0;
+  const maxRetries = 3;
+
+  while (
+    !isSleepingOrOffline && 
+    result.error && 
+    (result.error.status === 'FETCH_ERROR' || result.error.status === 'TIMEOUT_ERROR') && 
+    retries < maxRetries
+  ) {
+    retries++;
+    // Backoff exponentiel : 1.5s, 3s, 6s... Max 6s
+    const delay = Math.min(1500 * Math.pow(2, retries - 1), 6000); 
+    
     let requestUrl = typeof args === 'string' ? args : args?.url || '';
-    console.warn(`[API] Micro-decrochage reseau sur ${requestUrl}. Auto-Retry silencieux dans 1.5s...`);
-    await sleep(1500);
+    console.warn(`[API] Micro-coupure réseau détectée sur ${requestUrl}. Tentative ${retries}/${maxRetries} dans ${delay}ms...`);
+    
+    await sleep(delay);
     result = await baseQuery(args, api, extraOptions);
   }
 
+  // LOGIQUE DE REFRESH TOKEN
   if (result.error && result.error.status === 401) {
     if (!mutex.isLocked()) {
       const release = await mutex.acquire();
