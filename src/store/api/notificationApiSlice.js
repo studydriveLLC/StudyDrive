@@ -7,13 +7,15 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
       query: ({ page = 1, limit = 50 } = {}) => ({
         url: `/v1/notifications?page=${page}&limit=${limit}`,
       }),
-      providesTags: (result) =>
-        result?.data?.notifications
+      providesTags: (result) => {
+        const notifs = result?.data?.notifications || result?.notifications;
+        return notifs
           ? [
-              ...result.data.notifications.map(({ _id }) => ({ type: 'Notification', id: _id })),
+              ...notifs.map(({ _id }) => ({ type: 'Notification', id: _id })),
               { type: 'Notification', id: 'LIST' }
             ]
-          : [{ type: 'Notification', id: 'LIST' }]
+          : [{ type: 'Notification', id: 'LIST' }];
+      }
     }),
     
     getUnreadCount: builder.query({
@@ -21,18 +23,23 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
       providesTags: ['NotificationCount'],
       async onCacheEntryAdded(arg, { dispatch, cacheDataLoaded, cacheEntryRemoved }) {
         try {
-          await cacheDataLoaded;
+          await cacheDataLoaded.catch(() => {}); 
           
           const handleNewNotification = () => {
             dispatch(notificationApiSlice.util.invalidateTags(['NotificationCount']));
           };
 
-          socketService.on('new_notification', handleNewNotification);
+          if (socketService && typeof socketService.on === 'function') {
+            socketService.on('new_notification', handleNewNotification);
+          }
 
           await cacheEntryRemoved;
-          socketService.off('new_notification', handleNewNotification);
-        } catch {
-          // Ignorer l'erreur silencieusement si le chargement initial echoue
+          
+          if (socketService && typeof socketService.off === 'function') {
+            socketService.off('new_notification', handleNewNotification);
+          }
+        } catch (e) {
+          // Securite
         }
       }
     }),
@@ -45,8 +52,11 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
       async onQueryStarted(id, { dispatch, queryFulfilled }) {
         const patchResult = dispatch(
           notificationApiSlice.util.updateQueryData('getNotifications', { page: 1, limit: 50 }, (draft) => {
-            const notif = draft?.data?.notifications?.find(n => String(n._id) === String(id));
-            if (notif) notif.isRead = true;
+            const notifs = draft?.data?.notifications || draft?.notifications;
+            if (notifs) {
+              const notif = notifs.find(n => String(n._id) === String(id));
+              if (notif) notif.isRead = true;
+            }
           })
         );
         try {
@@ -66,8 +76,9 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         const patchResult = dispatch(
           notificationApiSlice.util.updateQueryData('getNotifications', { page: 1, limit: 50 }, (draft) => {
-            if (draft?.data?.notifications) {
-              draft.data.notifications.forEach(n => { n.isRead = true; });
+            const notifs = draft?.data?.notifications || draft?.notifications;
+            if (notifs) {
+              notifs.forEach(n => { n.isRead = true; });
             }
           })
         );
@@ -90,6 +101,8 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
           notificationApiSlice.util.updateQueryData('getNotifications', { page: 1, limit: 50 }, (draft) => {
             if (draft?.data?.notifications) {
               draft.data.notifications = draft.data.notifications.filter(n => String(n._id) !== String(id));
+            } else if (draft?.notifications) {
+              draft.notifications = draft.notifications.filter(n => String(n._id) !== String(id));
             }
           })
         );
@@ -113,6 +126,8 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
           notificationApiSlice.util.updateQueryData('getNotifications', { page: 1, limit: 50 }, (draft) => {
             if (draft?.data?.notifications) {
               draft.data.notifications = draft.data.notifications.filter(n => !notificationIds.includes(n._id));
+            } else if (draft?.notifications) {
+              draft.notifications = draft.notifications.filter(n => !notificationIds.includes(n._id));
             }
           })
         );
@@ -135,6 +150,8 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
           notificationApiSlice.util.updateQueryData('getNotifications', { page: 1, limit: 50 }, (draft) => {
             if (draft?.data?.notifications) {
               draft.data.notifications = [];
+            } else if (draft?.notifications) {
+              draft.notifications = [];
             }
           })
         );

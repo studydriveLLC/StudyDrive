@@ -10,11 +10,12 @@ export default function NotificationBell() {
   const theme = useAppTheme();
   const navigation = useNavigation();
   
-  const { data: unreadData } = useGetUnreadCountQuery(undefined, {
+  const { data: responseData } = useGetUnreadCountQuery(undefined, {
     refetchOnMountOrArgChange: true,
   });
   
-  const unreadCount = unreadData?.data?.count || 0;
+  const unreadCount = responseData?.data?.count ?? responseData?.count ?? 0;
+  
   const blinkOpacity = useSharedValue(1);
 
   useEffect(() => {

@@ -20,15 +20,20 @@ export const socialApiSlice = apiSlice.injectEndpoints({
       async onQueryStarted(targetId, { dispatch, queryFulfilled }) {
         const patchStatus = dispatch(
           socialApiSlice.util.updateQueryData('getFollowStatus', targetId, (draft) => {
-            if (draft && draft.data) {
-              draft.data.isFollowing = true;
+            if (draft) {
+              if (draft.data !== undefined) draft.data.isFollowing = true;
+              else draft.isFollowing = true;
             }
           })
         );
         const patchStats = dispatch(
           socialApiSlice.util.updateQueryData('getMyFollowStats', undefined, (draft) => {
-            if (draft && draft.data && typeof draft.data.followingCount === 'number') {
-              draft.data.followingCount += 1;
+            if (draft) {
+              if (draft.data !== undefined && typeof draft.data.followingCount === 'number') {
+                draft.data.followingCount += 1;
+              } else if (typeof draft.followingCount === 'number') {
+                draft.followingCount += 1;
+              }
             }
           })
         );
@@ -40,7 +45,6 @@ export const socialApiSlice = apiSlice.injectEndpoints({
           patchStats.undo();
         }
       },
-      invalidatesTags: ['FollowStats'], 
     }),
     
     unfollowUser: builder.mutation({
@@ -51,15 +55,20 @@ export const socialApiSlice = apiSlice.injectEndpoints({
       async onQueryStarted(targetId, { dispatch, queryFulfilled }) {
         const patchStatus = dispatch(
           socialApiSlice.util.updateQueryData('getFollowStatus', targetId, (draft) => {
-            if (draft && draft.data) {
-              draft.data.isFollowing = false;
+            if (draft) {
+              if (draft.data !== undefined) draft.data.isFollowing = false;
+              else draft.isFollowing = false;
             }
           })
         );
         const patchStats = dispatch(
           socialApiSlice.util.updateQueryData('getMyFollowStats', undefined, (draft) => {
-            if (draft && draft.data && typeof draft.data.followingCount === 'number') {
-              draft.data.followingCount = Math.max(0, draft.data.followingCount - 1);
+            if (draft) {
+              if (draft.data !== undefined && typeof draft.data.followingCount === 'number') {
+                draft.data.followingCount = Math.max(0, draft.data.followingCount - 1);
+              } else if (typeof draft.followingCount === 'number') {
+                draft.followingCount = Math.max(0, draft.followingCount - 1);
+              }
             }
           })
         );
@@ -71,7 +80,6 @@ export const socialApiSlice = apiSlice.injectEndpoints({
           patchStats.undo();
         }
       },
-      invalidatesTags: ['FollowStats'], 
     }),
   }),
   overrideExisting: true,
