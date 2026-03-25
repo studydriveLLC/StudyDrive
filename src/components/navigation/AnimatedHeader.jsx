@@ -1,3 +1,4 @@
+//src/components/navigation/AnimatedHeader.jsx
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, TextInput, Pressable, DeviceEventEmitter, Text, Keyboard } from 'react-native';
 import Animated, { 
@@ -29,14 +30,21 @@ export default function AnimatedHeader({ scrollY }) {
 
   const animations = useHeaderAnimations(scrollY, insets);
 
+  const forceCloseCompactSearch = useCallback(() => {
+    Keyboard.dismiss();
+    requestAnimationFrame(() => {
+      setIsCompactSearchActive(false);
+    });
+  }, []);
+
   useAnimatedReaction(
     () => scrollY.value,
     (currentValue) => {
       if (currentValue < SCROLL_DISTANCE / 2 && isCompactSearchActive) {
-        runOnJS(setIsCompactSearchActive)(false);
+        runOnJS(forceCloseCompactSearch)();
       }
     },
-    [isCompactSearchActive]
+    [isCompactSearchActive, forceCloseCompactSearch]
   );
 
   const animatedSearchProps = useAnimatedProps(() => {
@@ -62,18 +70,15 @@ export default function AnimatedHeader({ scrollY }) {
     if (searchValue.trim().length > 0) {
       DeviceEventEmitter.emit('EXECUTE_SEARCH', { query: searchValue.trim() });
     }
-    if (isCompactSearchActive) setIsCompactSearchActive(false);
+    if (isCompactSearchActive) {
+      forceCloseCompactSearch();
+    }
   };
 
   const clearSearch = () => {
     setSearchValue('');
     if (!isCompactSearchActive) Keyboard.dismiss();
     DeviceEventEmitter.emit('EXECUTE_SEARCH', { query: '' });
-  };
-
-  const closeCompactSearch = () => {
-    setIsCompactSearchActive(false);
-    Keyboard.dismiss();
   };
 
   return (
@@ -101,7 +106,7 @@ export default function AnimatedHeader({ scrollY }) {
           </>
         ) : (
           <Animated.View entering={FadeInRight} exiting={FadeOutRight} style={styles.compactSearchWrapper}>
-            <Pressable onPress={closeCompactSearch} hitSlop={15} style={styles.backButtonCompact}>
+            <Pressable onPress={forceCloseCompactSearch} hitSlop={15} style={styles.backButtonCompact}>
               <ArrowLeft color={theme.colors.surface} size={24} />
             </Pressable>
             
