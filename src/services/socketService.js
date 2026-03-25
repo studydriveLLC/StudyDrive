@@ -1,3 +1,4 @@
+// src/services/socketService.js
 import { io } from 'socket.io-client';
 import { getToken } from '../store/secureStoreAdapter';
 
@@ -9,20 +10,37 @@ const getBaseOrigin = (url) => {
 };
 
 const socketUrl = getBaseOrigin(rawBaseUrl);
-let socket = null;
+
+// 1. Singleton Global : Survie au Fast Refresh d'Expo
+const getSocketInstance = () => {
+  return global.__SOCKET_INSTANCE__ || null;
+};
+
+const setSocketInstance = (instance) => {
+  global.__SOCKET_INSTANCE__ = instance;
+};
+
+// Verrou de sécurité pour éviter le spam de Redux
+let isRefreshingTriggered = false;
 
 const socketService = {
-  connect: async () => {
+  connect: () => {
+    let socket = getSocketInstance();
+    
+    // Si l'instance existe et est connectée (suite à un Fast Refresh), on la réutilise
     if (socket && socket.connected) return socket;
     
     if (socket) {
       socket.disconnect();
     }
     
-    const token = await getToken('accessToken');
-    
+    // 2. Authentification Dynamique (Lazy Evaluation)
     socket = io(socketUrl, {
-      auth: { token },
+      auth: async (cb) => {
+        // Le socket lira toujours le token le plus récent avant chaque reconnexion
+        const token = await getToken('accessToken');
+        cb({ token });
+      },
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -32,7 +50,12 @@ const socketService = {
       autoConnect: true
     });
     
-    socket.on('connect', () => console.log('[Socket] Connecte au serveur avec succes'));
+    setSocketInstance(socket);
+    
+    socket.on('connect', () => {
+      console.log('[Socket] Connecte au serveur avec succes');
+      isRefreshingTriggered = false; // Réinitialise le verrou
+    });
     
     socket.on('disconnect', (reason) => {
       console.log('[Socket] Deconnecte. Raison:', reason);
@@ -44,11 +67,23 @@ const socketService = {
     socket.on('connect_error', (err) => {
       console.log('[Socket] Erreur de connexion:', err.message);
       
-      // Auto-reparation : Si le token est mort, on force Redux a en chercher un nouveau
-      if (err.message === 'Token invalide ou expire' || err.message === 'Authentification requise') {
-         const { store } = require('../store/store');
-         const { forceSilentRefresh } = require('../store/slices/authSlice');
-         if (store) store.dispatch(forceSilentRefresh());
+      // 3. Sécurité Anti-Spam (Debounce)
+      if ((err.message === 'Token invalide ou expire' || err.message === 'Authentification requise')) {
+         if (!isRefreshingTriggered) {
+           isRefreshingTriggered = true;
+           console.log('[Socket] Declenchement protege du rafraichissement silencieux...');
+           const { store } = require('../store/store');
+           const { forceSilentRefresh } = require('../store/slices/authSlice');
+           
+           if (store) store.dispatch(forceSilentRefresh());
+           
+           // Libération du verrou après 10s pour permettre une autre tentative si echec
+           setTimeout(() => {
+               isRefreshingTriggered = false;
+           }, 10000);
+         } else {
+           console.log('[Socket] Rafraichissement deja en cours, tentative ignoree.');
+         }
       }
     });
     
@@ -56,32 +91,31 @@ const socketService = {
   },
   
   disconnect: () => {
+    let socket = getSocketInstance();
     if (socket) {
       socket.disconnect();
-      socket = null;
+      setSocketInstance(null);
       console.log('[Socket] Deconnexion volontaire');
     }
   },
   
-  updateToken: (token) => {
+  updateToken: () => {
+    let socket = getSocketInstance();
     if (socket) {
-      socket.auth = { token };
+      // Grâce à l'évaluation paresseuse, on a juste à forcer la déconnexion/reconnexion.
+      // Le socket ira chercher le nouveau token lui-même.
       socket.disconnect().connect();
       console.log('[Socket] Token mis a jour et reconnexion forcee');
     }
   },
 
-  forceReconnect: async () => {
+  forceReconnect: () => {
     console.log('[Socket] Reconnexion forcee demandee...');
+    let socket = getSocketInstance();
     if (socket) {
-      socket.disconnect();
-    }
-    const token = await getToken('accessToken');
-    if (socket) {
-      socket.auth = { token };
-      socket.connect();
+      socket.disconnect().connect();
     } else {
-      await socketService.connect();
+      socketService.connect();
     }
   }
 };
