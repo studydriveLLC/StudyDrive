@@ -1,3 +1,4 @@
+// src/navigation/AppNavigator.jsx
 import React, { useEffect } from 'react';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
@@ -16,6 +17,9 @@ import ErrorToast from '../components/ui/ErrorToast';
 import SuccessToast from '../components/ui/SuccessToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
 import TokenGuardian from '../components/auth/TokenGuardian';
+
+// IMPORT DE NOTRE NOUVEAU SOCKET
+import socketService from '../services/socketService';
 
 const Stack = createStackNavigator();
 
@@ -62,6 +66,10 @@ export default function AppNavigator() {
             token, 
             refreshToken
           }));
+
+          // TRICHE YELY : On connecte le socket immediatement, de maniere synchrone, avec un token valide garanti.
+          socketService.connect(token);
+
         } else {
           dispatch(setCredentials({ user: null, token: null, refreshToken: null }));
         }
@@ -127,7 +135,6 @@ export default function AppNavigator() {
           )}
         </Stack.Navigator>
         
-        {/* Les notifications globales */}
         <ErrorToast />
         <SuccessToast />
       </View>

@@ -1,6 +1,5 @@
 // src/services/socketService.js
 import { io } from 'socket.io-client';
-import { getToken } from '../store/secureStoreAdapter';
 
 const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || '';
 
@@ -9,115 +8,152 @@ const getBaseOrigin = (url) => {
   return match ? match[1] : url;
 };
 
-const socketUrl = getBaseOrigin(rawBaseUrl);
+const SOCKET_URL = getBaseOrigin(rawBaseUrl);
 
-// 1. Singleton Global : Survie au Fast Refresh d'Expo
-const getSocketInstance = () => {
-  return global.__SOCKET_INSTANCE__ || null;
-};
-
-const setSocketInstance = (instance) => {
-  global.__SOCKET_INSTANCE__ = instance;
-};
-
-// Verrou de sécurité pour éviter le spam de Redux
-let isRefreshingTriggered = false;
-
-const socketService = {
-  connect: () => {
-    let socket = getSocketInstance();
-    
-    // Si l'instance existe et est connectée (suite à un Fast Refresh), on la réutilise
-    if (socket && socket.connected) return socket;
-    
-    if (socket) {
-      socket.disconnect();
+class SocketService {
+  constructor() {
+    // Fusion du pattern Yely avec la survie au Fast Refresh d'Expo
+    if (!global.__LOKONET_SOCKET__) {
+      this.socket = null;
+      this.isConnected = false;
+      this.reconnectAttempts = 0;
+      this._listeners = [];
+      this.refreshTimeout = null;
+      global.__LOKONET_SOCKET__ = this;
     }
-    
-    // 2. Authentification Dynamique (Lazy Evaluation)
-    socket = io(socketUrl, {
-      auth: async (cb) => {
-        // Le socket lira toujours le token le plus récent avant chaque reconnexion
-        const token = await getToken('accessToken');
-        cb({ token });
-      },
+    return global.__LOKONET_SOCKET__;
+  }
+
+  connect(token) {
+    if (!token || !SOCKET_URL) return;
+
+    if (this.socket?.connected) {
+      if (this.socket.auth.token !== token) {
+        this.socket.auth.token = token;
+        this.socket.disconnect().connect();
+      }
+      return;
+    }
+
+    if (this.socket) {
+      this.socket.auth.token = token;
+      this.socket.connect();
+      return;
+    }
+
+    // Connexion propre, sans promesse asynchrone bloquante
+    this.socket = io(SOCKET_URL, {
+      auth: { token },
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000,
       timeout: 20000,
-      autoConnect: true
-    });
-    
-    setSocketInstance(socket);
-    
-    socket.on('connect', () => {
-      console.log('[Socket] Connecte au serveur avec succes');
-      isRefreshingTriggered = false; // Réinitialise le verrou
-    });
-    
-    socket.on('disconnect', (reason) => {
-      console.log('[Socket] Deconnecte. Raison:', reason);
-      if (reason === 'io server disconnect') {
-        socket.connect();
-      }
     });
 
-    socket.on('connect_error', (err) => {
-      console.log('[Socket] Erreur de connexion:', err.message);
+    // Re-attachement automatique des ecouteurs lors de la creation
+    this._listeners.forEach(({ event, callback }) => {
+      this.socket.on(event, callback);
+    });
+
+    this._setupCoreListeners();
+  }
+
+  updateToken(newToken) {
+    if (!newToken) return;
+    
+    if (!this.socket) {
+      this.connect(newToken);
+      return;
+    }
+
+    if (this.socket.auth.token === newToken) {
+      return; 
+    }
+
+    this.socket.auth.token = newToken;
+    
+    if (!this.socket.connected) {
+      this.socket.connect(); 
+    } else {
+      this.socket.disconnect().connect();
+    }
+  }
+
+  _setupCoreListeners() {
+    if (!this.socket) return;
+
+    this.socket.on('connect', () => {
+      this.isConnected = true;
+      this.reconnectAttempts = 0;
+      console.log('[Socket] Connecte au serveur avec succes');
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      this.isConnected = false;
+      console.log('[Socket] Deconnecte. Raison:', reason);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.log('[Socket] Erreur de connexion:', error.message);
       
-      // 3. Sécurité Anti-Spam (Debounce)
-      if ((err.message === 'Token invalide ou expire' || err.message === 'Authentification requise')) {
-         if (!isRefreshingTriggered) {
-           isRefreshingTriggered = true;
+      if (error.message === 'Token invalide ou expire' || error.message === 'Authentification requise') {
+        // Securite anti-spam temporelle
+        if (!this.refreshTimeout) {
            console.log('[Socket] Declenchement protege du rafraichissement silencieux...');
            const { store } = require('../store/store');
            const { forceSilentRefresh } = require('../store/slices/authSlice');
            
-           if (store) store.dispatch(forceSilentRefresh());
+           if (store && forceSilentRefresh) {
+             store.dispatch(forceSilentRefresh());
+           }
            
-           // Libération du verrou après 10s pour permettre une autre tentative si echec
-           setTimeout(() => {
-               isRefreshingTriggered = false;
+           this.refreshTimeout = setTimeout(() => {
+             this.refreshTimeout = null;
            }, 10000);
-         } else {
-           console.log('[Socket] Rafraichissement deja en cours, tentative ignoree.');
-         }
+        }
       }
     });
-    
-    return socket;
-  },
-  
-  disconnect: () => {
-    let socket = getSocketInstance();
-    if (socket) {
-      socket.disconnect();
-      setSocketInstance(null);
-      console.log('[Socket] Deconnexion volontaire');
-    }
-  },
-  
-  updateToken: () => {
-    let socket = getSocketInstance();
-    if (socket) {
-      // Grâce à l'évaluation paresseuse, on a juste à forcer la déconnexion/reconnexion.
-      // Le socket ira chercher le nouveau token lui-même.
-      socket.disconnect().connect();
-      console.log('[Socket] Token mis a jour et reconnexion forcee');
-    }
-  },
+  }
 
-  forceReconnect: () => {
-    console.log('[Socket] Reconnexion forcee demandee...');
-    let socket = getSocketInstance();
-    if (socket) {
-      socket.disconnect().connect();
-    } else {
-      socketService.connect();
+  on(event, callback) {
+    const exists = this._listeners.some(l => l.event === event && l.callback === callback);
+    if (!exists) {
+      this._listeners.push({ event, callback });
+      if (this.socket) {
+        this.socket.on(event, callback);
+      }
     }
   }
-};
 
+  off(event, callback) {
+    this._listeners = this._listeners.filter(
+      (l) => !(l.event === event && l.callback === callback)
+    );
+    if (this.socket) {
+      this.socket.off(event, callback);
+    }
+  }
+
+  emit(event, data) {
+    if (this.socket?.connected) {
+      this.socket.emit(event, data);
+    }
+  }
+
+  disconnect() {
+    this._listeners.forEach(({ event, callback }) => {
+      this.socket?.off(event, callback);
+    });
+
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+      this.isConnected = false;
+    }
+  }
+}
+
+const socketService = new SocketService();
 export default socketService;
