@@ -15,7 +15,6 @@ export default function ResourceOptionsModal({
   onDelete,
   onReport,
   onEdit,
-  // NOUVEAUX PROPS UX : États de chargement spécifiques par action
   isSaving,
   isDeleting,
   isReporting
@@ -24,7 +23,6 @@ export default function ResourceOptionsModal({
   
   if (!resource) return null;
 
-  // Fonction utilitaire enrichie pour gérer l'état de chargement
   const renderOption = (icon, label, onPress, isDestructive = false, isLoading = false) => (
     <Pressable
       style={[
@@ -79,8 +77,8 @@ export default function ResourceOptionsModal({
           onShare
         )}
         
-        {/* Intégration du loader d'ajout aux favoris */}
-        {renderOption(
+        {/* CORRECTION UX : Le bouton n'apparait que si ce n'est pas NOTRE ressource */}
+        {!isMyResource && onSave && renderOption(
           <Bookmark color={theme.colors.primaryDark} size={20} />,
           'Ajouter / Retirer des favoris',
           onSave,
@@ -95,7 +93,6 @@ export default function ResourceOptionsModal({
               'Modifier le fichier',
               onEdit
             )}
-            {/* Anticipation : Loader pour la suppression */}
             {renderOption(
               <Trash2 color={theme.colors.error} size={20} />,
               'Supprimer le fichier',
@@ -105,8 +102,7 @@ export default function ResourceOptionsModal({
             )}
           </>
         ) : (
-          /* Anticipation : Loader pour le signalement */
-          renderOption(
+          onReport && renderOption(
             <AlertTriangle color={theme.colors.error} size={20} />,
             'Signaler ce document',
             onReport,

@@ -17,17 +17,14 @@ class SocketService {
       this.isConnected = false;
       this.reconnectAttempts = 0;
       this._listeners = [];
-      this.refreshTimeout = null;
       global.__LOKONET_SOCKET__ = this;
     }
     return global.__LOKONET_SOCKET__;
   }
 
-  // On passe en async pour respecter l'ancienne signature attendue par les composants
   async connect(tokenParam) {
     let token = tokenParam;
     
-    // RETROCOMPATIBILITE : Si un composant appelle connect() sans token (l'ancienne methode)
     if (!token) {
       const { getToken } = require('../store/secureStoreAdapter');
       token = await getToken('accessToken');
@@ -40,13 +37,13 @@ class SocketService {
         this.socket.auth.token = token;
         this.socket.disconnect().connect();
       }
-      return this.socket; // RETROCOMPATIBILITE : On renvoie l'objet brut
+      return this.socket;
     }
 
     if (this.socket) {
       this.socket.auth.token = token;
       this.socket.connect();
-      return this.socket; // RETROCOMPATIBILITE
+      return this.socket;
     }
 
     this.socket = io(SOCKET_URL, {
@@ -65,7 +62,7 @@ class SocketService {
 
     this._setupCoreListeners();
 
-    return this.socket; // RETROCOMPATIBILITE : Indispensable pour tes hooks UI !
+    return this.socket;
   }
 
   updateToken(newToken) {
@@ -90,14 +87,12 @@ class SocketService {
   }
 
   async forceReconnect() {
-    console.log('[Socket] Reconnexion forcee demandee...');
     if (this.socket) {
       this.socket.disconnect();
     }
-    return await this.connect(); // On retourne le socket ici aussi
+    return await this.connect();
   }
 
-  // Methode de secours au cas ou un composant utiliserait getSocket()
   getSocket() {
     return this.socket;
   }
@@ -108,32 +103,19 @@ class SocketService {
     this.socket.on('connect', () => {
       this.isConnected = true;
       this.reconnectAttempts = 0;
-      console.log('[Socket] Connecte au serveur avec succes');
+      console.log('[Socket] Connecté au serveur');
     });
 
     this.socket.on('disconnect', (reason) => {
       this.isConnected = false;
-      console.log('[Socket] Deconnecte. Raison:', reason);
+      console.log('[Socket] Déconnecté:', reason);
     });
 
     this.socket.on('connect_error', (error) => {
-      console.log('[Socket] Erreur de connexion:', error.message);
-      
-      if (error.message === 'Token invalide ou expire' || error.message === 'Authentification requise') {
-        if (!this.refreshTimeout) {
-           console.log('[Socket] Declenchement protege du rafraichissement silencieux...');
-           const { store } = require('../store/store');
-           const { forceSilentRefresh } = require('../store/slices/authSlice');
-           
-           if (store && forceSilentRefresh) {
-             store.dispatch(forceSilentRefresh());
-           }
-           
-           this.refreshTimeout = setTimeout(() => {
-             this.refreshTimeout = null;
-           }, 10000);
-        }
-      }
+      // On retire la commande de rafraichissement forcée.
+      // Le socket est passif, il attend que l'API (qui rencontre sûrement la même erreur 401 au même moment)
+      // fasse le travail de rafraichissement proprement avec son Mutex, et lui injecte le nouveau token.
+      console.log('[Socket] Erreur passive:', error.message);
     });
   }
 

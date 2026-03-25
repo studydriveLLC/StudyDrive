@@ -43,37 +43,29 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
   await mutex.waitForUnlock();
   
   const tokenBeforeRequest = api.getState().auth?.token;
-  
-  const startTime = Date.now();
   let result = await baseQuery(args, api, extraOptions);
 
-  const duration = Date.now() - startTime;
-  const wasSuspended = duration > 25000;
-  
-  const isBrowserHidden = Platform.OS === 'web' && typeof document !== 'undefined' && document.visibilityState === 'hidden';
-  const isBrowserOffline = Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.onLine === false;
-
-  const isSleepingOrOffline = wasSuspended || isBrowserHidden || isBrowserOffline;
+  // PROTECTION ANTI-DDOS: Si la requête est annulée par React (Fast Refresh, démontage), on stoppe tout de suite.
+  if (api.signal && api.signal.aborted) {
+    return result;
+  }
 
   let requestUrl = typeof args === 'string' ? args : args?.url || '';
-  // CORRECTION : Ajout de /updateMyPassword pour éviter la boucle infinie sur erreur 401
   const isAuthEndpoint = requestUrl.includes('/login') || requestUrl.includes('/register') || requestUrl.includes('/refresh') || requestUrl.includes('/updateMyPassword');
 
   let retries = 0;
-  const maxRetries = 3;
+  const maxRetries = 1; // Une seule tentative de courtoisie suffit pour une vraie micro-coupure.
 
   while (
-    !isSleepingOrOffline && 
     !isAuthEndpoint && 
     result.error && 
-    (result.error.status === 'FETCH_ERROR' || result.error.status === 'TIMEOUT_ERROR') && 
+    result.error.status === 'FETCH_ERROR' && 
+    (!api.signal || !api.signal.aborted) && 
     retries < maxRetries
   ) {
     retries++;
-    const delay = Math.min(1500 * Math.pow(2, retries - 1), 6000); 
-    console.warn(`[API] Micro-coupure réseau détectée sur ${requestUrl}. Tentative ${retries}/${maxRetries} dans ${delay}ms...`);
-    
-    await sleep(delay);
+    console.warn(`[API] Tentative de récupération réseau sur ${requestUrl}...`);
+    await sleep(1000);
     result = await baseQuery(args, api, extraOptions);
   }
 
@@ -94,7 +86,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
         }
 
         if (!currentRefreshToken) {
-            console.warn("[API] Aucun refresh token disponible. Déconnexion.");
+            console.warn("[API] Aucun refresh token. Déconnexion.");
             api.dispatch(performLogout());
             return result;
         }
@@ -118,16 +110,15 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
             refreshToken: newRefreshToken 
           }));
           
+          // C'est ici que l'on réveille le socket en toute sécurité
           const socketService = require('../../services/socketService').default;
           socketService.updateToken(newToken);
 
           result = await baseQuery(args, api, extraOptions);
         } else if (refreshResult.error && refreshResult.error.status !== 'FETCH_ERROR' && refreshResult.error.status !== 'TIMEOUT_ERROR') {
-          console.warn("[API] Le serveur a rejete le refresh token. Déconnexion.");
+          console.warn("[API] Refresh token rejeté. Déconnexion.");
           api.dispatch(performLogout());
         }
-      } catch (error) {
-        console.error('[API] Echec critique lors du rafraichissement', error);
       } finally {
         api.dispatch(setTokenRefreshing(false));
         release();

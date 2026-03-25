@@ -1,13 +1,9 @@
 // src/screens/ressources/RessourcesScreen.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, Platform, AppState, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, DeviceEventEmitter, RefreshControl, AppState, Share } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import * as WebBrowser from 'expo-web-browser';
 import { useSelector, useDispatch } from 'react-redux';
-import { Trash2 } from 'lucide-react-native';
 
 import AnimatedHeader from '../../components/navigation/AnimatedHeader';
 import SkeletonResourceCard from '../../components/ressources/SkeletonResourceCard';
@@ -16,16 +12,21 @@ import ResourceOptionsModal from '../../components/ressources/ResourceOptionsMod
 import DocumentViewerModal from '../../components/ressources/DocumentViewerModal';
 import EditResourceModal from '../../components/ressources/EditResourceModal';
 import ReportResourceModal from '../../components/ressources/ReportResourceModal';
-import BottomSheet from '../../components/ui/BottomSheet';
+import DeleteResourceModal from '../../components/ressources/DeleteResourceModal';
 import SmartRefreshOverlay from '../../components/ui/SmartRefreshOverlay';
+
 import { useAppTheme } from '../../theme/theme';
 import socketService from '../../services/socketService';
 import { showSuccessToast } from '../../store/slices/uiSlice';
 import { 
-  resourceApiSlice, useGetResourcesQuery, useDeleteResourceMutation, 
+  useGetResourcesQuery, useDeleteResourceMutation, 
   useLogDownloadMutation, useLogViewMutation, useGetResourceQuery, 
   useToggleFavoriteMutation 
 } from '../../store/api/resourceApiSlice';
+
+// IMPORT DES CUSTOM HOOKS
+import useResourceSocketEvents from '../../hooks/useResourceSocketEvents';
+import useResourceFileManager from '../../hooks/useResourceFileManager';
 
 export default function RessourcesScreen({ navigation }) {
   const theme = useAppTheme();
@@ -41,30 +42,28 @@ export default function RessourcesScreen({ navigation }) {
   const [queryArgs, setQueryArgs] = useState({ page: 1, limit: 20 });
   const queryArgsRef = useRef(queryArgs);
 
-  const [downloads, setDownloads] = useState({});
   const [activeOptionsResource, setActiveOptionsResource] = useState(null);
-  const [activeDocument, setActiveDocument] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isSmartRefreshing, setIsSmartRefreshing] = useState(false);
-  const [activeViewId, setActiveViewId] = useState(null);
 
   const [editingResource, setEditingResource] = useState(null);
   const [reportingResource, setReportingResource] = useState(null);
   const [resourceToDelete, setResourceToDelete] = useState(null);
 
-  useEffect(() => {
-    queryArgsRef.current = queryArgs;
-  }, [queryArgs]);
+  useEffect(() => { queryArgsRef.current = queryArgs; }, [queryArgs]);
 
   const { data: resources = [], isLoading, isError, refetch } = useGetResourcesQuery(queryArgs);
-  useGetResourceQuery(activeViewId, { skip: !activeViewId });
   
   const [logDownload] = useLogDownloadMutation();
   const [logView] = useLogViewMutation();
   const [deleteResource, { isLoading: isDeleting }] = useDeleteResourceMutation();
-  
-  // CORRECTION : Extraction de l'état isLoading pour les favoris
   const [toggleFavorite, { isLoading: isTogglingFavorite }] = useToggleFavoriteMutation();
+
+  // CUSTOM HOOKS
+  useResourceSocketEvents(queryArgsRef);
+  const { downloads, activeDocument, setActiveDocument, activeViewId, handleViewAction, handleDownloadAction } = useResourceFileManager(token, theme, logView, logDownload);
+
+  useGetResourceQuery(activeViewId, { skip: !activeViewId });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -75,53 +74,10 @@ export default function RessourcesScreen({ navigation }) {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (nextAppState === 'active') {
-        socketService.forceReconnect();
-      }
+      if (nextAppState === 'active') socketService.forceReconnect();
     });
     return () => subscription.remove();
   }, []);
-
-  useEffect(() => {
-    let socketInstance;
-    const setupLiveResources = async () => {
-      try {
-        socketInstance = await socketService.connect();
-        
-        socketInstance.on('resourceStatsUpdated', (data) => {
-          dispatch(resourceApiSlice.util.updateQueryData('getResources', queryArgsRef.current, (draft) => {
-            const resource = draft.find(r => String(r._id) === String(data.id));
-            if (resource) {
-              if (data.views !== undefined) resource.views = data.views;
-              if (data.downloads !== undefined) resource.downloads = data.downloads;
-            }
-          }));
-          dispatch(resourceApiSlice.util.invalidateTags([{ type: 'Resource', id: data.id }]));
-        });
-
-        socketInstance.on('newResource', (newResource) => {
-          dispatch(resourceApiSlice.util.updateQueryData('getResources', queryArgsRef.current, (draft) => {
-            const index = draft.findIndex(r => String(r._id) === String(newResource._id));
-            if (index !== -1) {
-              draft[index] = { ...draft[index], ...newResource };
-            } else if (queryArgsRef.current.page === 1) {
-              draft.unshift(newResource);
-            }
-          }));
-          dispatch(resourceApiSlice.util.invalidateTags([{ type: 'Resource', id: 'LIST' }]));
-        });
-      } catch (error) {
-        console.log('Erreur Socket UI:', error);
-      }
-    };
-    setupLiveResources();
-    return () => {
-      if (socketInstance) {
-        socketInstance.off('resourceStatsUpdated');
-        socketInstance.off('newResource');
-      }
-    };
-  }, [dispatch]);
 
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('SMART_TAB_PRESS', async (event) => {
@@ -142,80 +98,6 @@ export default function RessourcesScreen({ navigation }) {
     onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
 
-  const handleViewAction = async (resource) => {
-    let fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
-    if (!fileUrl) return;
-
-    if (!fileUrl.startsWith('http')) {
-      const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
-      fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
-    }
-
-    setActiveViewId(resource._id);
-    logView(resource._id).unwrap().catch(() => {});
-
-    const format = resource.format?.toLowerCase();
-    const supportedFormats = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg'];
-
-    if (supportedFormats.includes(format)) {
-      setActiveDocument({ ...resource, resolvedUrl: fileUrl });
-    } else {
-      try {
-        await WebBrowser.openBrowserAsync(fileUrl, {
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-          toolbarColor: theme.colors.background,
-        });
-      } catch (error) {}
-    }
-  };
-
-  const handleDownloadAction = async (resource) => {
-    let fileUrl = resource.fileUrl || resource.url || resource.tempFilePath;
-    if (!fileUrl || downloads[resource._id]?.status === 'downloading') return;
-    
-    const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
-    if (!fileUrl.startsWith('http')) fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
-    
-    setDownloads(prev => ({ ...prev, [resource._id]: { status: 'downloading', progress: 0 } }));
-
-    try {
-      const fileName = `${(resource.title || 'Doc').replace(/[^a-zA-Z0-9]/g, '_')}.${resource.format || 'pdf'}`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      const isOurBackend = fileUrl.includes(rawBaseUrl) || fileUrl.includes('192.168.') || fileUrl.includes('localhost');
-      const options = (isOurBackend && !fileUrl.includes('cloudinary.com') && token) ? { headers: { Authorization: `Bearer ${token}` } } : {};
-
-      const onProgress = (e) => setDownloads(prev => ({ ...prev, [resource._id]: { status: 'downloading', progress: (e.totalBytesWritten / e.totalBytesExpectedToWrite) * 100 || 50 } }));
-      const downloadResumable = FileSystem.createDownloadResumable(fileUrl, fileUri, options, onProgress);
-
-      if (Platform.OS === 'android') {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (!permissions.granted) return setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
-        const result = await downloadResumable.downloadAsync();
-        if (result && result.status < 400) {
-          try {
-            const base64Data = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64 });
-            const savedUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/octet-stream');
-            await FileSystem.writeAsStringAsync(savedUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-            await FileSystem.deleteAsync(result.uri, { idempotent: true });
-          } catch (safError) {
-            if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri, { dialogTitle: 'Enregistrer le document' });
-          }
-        } else throw new Error('Erreur HTTP');
-      } else {
-        const result = await downloadResumable.downloadAsync();
-        if (result && result.status < 400) {
-          if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri, { dialogTitle: 'Enregistrer le document' });
-        } else throw new Error('Erreur HTTP');
-      }
-
-      setDownloads(prev => ({ ...prev, [resource._id]: { status: 'success', progress: 100 } }));
-      logDownload(resource._id).unwrap().catch(() => {});
-      setTimeout(() => setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } })), 3000);
-    } catch (error) {
-      setDownloads(prev => ({ ...prev, [resource._id]: { status: 'idle', progress: 0 } }));
-    }
-  };
-
   const handleConfirmDelete = async () => {
     if (!resourceToDelete) return;
     try {
@@ -225,6 +107,22 @@ export default function RessourcesScreen({ navigation }) {
     } catch (error) {
       console.log('Erreur de suppression:', error);
     }
+  };
+
+  const handleShareResource = async () => {
+    if (!activeOptionsResource) return;
+    let fileUrl = activeOptionsResource.fileUrl || activeOptionsResource.url || activeOptionsResource.tempFilePath;
+    if (fileUrl && !fileUrl.startsWith('http')) {
+      const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:5000';
+      fileUrl = `${rawBaseUrl.replace(/\/$/, '')}/${fileUrl.replace(/^\//, '')}`;
+    }
+    try {
+      await Share.share({
+        message: `📚 Document LokoNet : *${activeOptionsResource.title}*\nNiveau : ${activeOptionsResource.level || 'Non spécifié'}\n\nLien : ${fileUrl}`,
+        title: activeOptionsResource.title,
+      });
+    } catch (error) {} 
+    finally { setActiveOptionsResource(null); }
   };
 
   return (
@@ -276,25 +174,15 @@ export default function RessourcesScreen({ navigation }) {
         resource={activeOptionsResource}
         onClose={() => setActiveOptionsResource(null)}
         isMyResource={activeOptionsResource?.uploadedBy?._id === currentUserId}
-        isSaving={isTogglingFavorite} // CONNEXION DU LOADER ICI
-        onShare={async () => {
-          const url = activeOptionsResource.fileUrl || activeOptionsResource.url;
-          if (url && await Sharing.isAvailableAsync()) await Sharing.shareAsync(url);
-          setActiveOptionsResource(null);
-        }}
-        
+        isSaving={isTogglingFavorite}
+        onShare={handleShareResource}
         onSave={async () => {
           try { 
-            // Le modal restera ouvert pendant le "await" grace a l'etat isTogglingFavorite
             const result = await toggleFavorite(activeOptionsResource._id).unwrap();
             dispatch(showSuccessToast({ message: result.message }));
-          } catch (e) {
-            console.log('Erreur favoris:', e);
-          }
-          // On ferme la modale seulement une fois la requete terminee
+          } catch (e) {}
           setActiveOptionsResource(null);
         }}
-
         onEdit={() => {
           setEditingResource(activeOptionsResource);
           setActiveOptionsResource(null);
@@ -309,56 +197,18 @@ export default function RessourcesScreen({ navigation }) {
         }}
       />
 
-      <EditResourceModal
-        visible={!!editingResource}
-        resource={editingResource}
-        onClose={() => setEditingResource(null)}
+      <EditResourceModal visible={!!editingResource} resource={editingResource} onClose={() => setEditingResource(null)} />
+      <ReportResourceModal visible={!!reportingResource} resource={reportingResource} onClose={() => setReportingResource(null)} />
+      <DocumentViewerModal visible={!!activeDocument} onClose={() => setActiveDocument(null)} resource={activeDocument} token={token} />
+      
+      {/* MODALE DE SUPPRESSION EXTRAITE */}
+      <DeleteResourceModal 
+        visible={!!resourceToDelete} 
+        onClose={() => setResourceToDelete(null)} 
+        onConfirm={handleConfirmDelete} 
+        resourceTitle={resourceToDelete?.title} 
+        isLoading={isDeleting} 
       />
-
-      <ReportResourceModal
-        visible={!!reportingResource}
-        resource={reportingResource}
-        onClose={() => setReportingResource(null)}
-      />
-
-      <DocumentViewerModal
-        visible={!!activeDocument}
-        onClose={() => setActiveDocument(null)}
-        resource={activeDocument}
-        token={token}
-      />
-
-      <BottomSheet isVisible={!!resourceToDelete} onClose={() => setResourceToDelete(null)}>
-        <View style={styles.deleteConfirmContainer}>
-          <View style={styles.deleteIconBox}>
-            <Trash2 color={theme.colors.error} size={32} />
-          </View>
-          <Text style={[styles.deleteConfirmTitle, { color: theme.colors.text }]}>Supprimer ce document ?</Text>
-          <Text style={[styles.deleteConfirmText, { color: theme.colors.textMuted }]}>
-            Cette action est irreversible. Le document "{resourceToDelete?.title}" sera definitivement efface du serveur.
-          </Text>
-          <View style={styles.deleteConfirmActions}>
-            <Pressable 
-              style={[styles.cancelBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} 
-              onPress={() => setResourceToDelete(null)}
-              disabled={isDeleting}
-            >
-              <Text style={[styles.cancelBtnText, { color: theme.colors.text }]}>Annuler</Text>
-            </Pressable>
-            <Pressable 
-              style={[styles.confirmDeleteBtn, { backgroundColor: theme.colors.error }]} 
-              onPress={handleConfirmDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.confirmDeleteText}>Oui, supprimer</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </BottomSheet>
     </View> 
   );
 }
@@ -369,13 +219,4 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, textAlign: 'center', marginBottom: 20 },
   retryButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20 },
   retryText: { fontSize: 14, fontWeight: '700' },
-  deleteConfirmContainer: { paddingHorizontal: 24, paddingBottom: 30, paddingTop: 10, alignItems: 'center' },
-  deleteIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(235, 87, 87, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  deleteConfirmTitle: { fontSize: 20, fontWeight: '800', marginBottom: 12, textAlign: 'center' },
-  deleteConfirmText: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  deleteConfirmActions: { flexDirection: 'row', gap: 12, width: '100%' },
-  cancelBtn: { flex: 1, height: 50, borderRadius: 25, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  cancelBtnText: { fontSize: 15, fontWeight: '700' },
-  confirmDeleteBtn: { flex: 1, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  confirmDeleteText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' }
 });

@@ -1,7 +1,22 @@
+// src/store/api/resourceApiSlice.js
 import { apiSlice } from '../slices/apiSlice';
 
 export const resourceApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
+    // NOUVEAU : Récupérer mes propres ressources
+    getMyResources: builder.query({
+      query: () => ({ url: '/v1/resources/me' }),
+      transformResponse: (response) => response.data?.resources || [],
+      keepUnusedDataFor: 300,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ _id }) => ({ type: 'Resource', id: _id })),
+              { type: 'Resource', id: 'MY_LIST' }
+            ]
+          : [{ type: 'Resource', id: 'MY_LIST' }]
+    }),
+
     getResources: builder.query({
       query: ({ page = 1, limit = 20, category, level, search, sort } = {}) => {
         const params = new URLSearchParams();
@@ -96,7 +111,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
     
     deleteResource: builder.mutation({
       query: (id) => ({ url: `/v1/resources/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Resource', id: 'LIST' }],
+      invalidatesTags: [{ type: 'Resource', id: 'LIST' }, { type: 'Resource', id: 'MY_LIST' }],
     }),
     
     updateResource: builder.mutation({
@@ -105,7 +120,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
         method: 'PUT',
         body: patch,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Resource', id }, { type: 'Resource', id: 'LIST' }],
+      invalidatesTags: (result, error, { id }) => [{ type: 'Resource', id }, { type: 'Resource', id: 'LIST' }, { type: 'Resource', id: 'MY_LIST' }],
     }),
     
     toggleFavorite: builder.mutation({
@@ -124,6 +139,7 @@ export const resourceApiSlice = apiSlice.injectEndpoints({
 });
 
 export const {
+  useGetMyResourcesQuery,
   useGetResourcesQuery,
   useGetResourceQuery,
   useUploadResourceMutation,

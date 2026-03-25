@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Settings, Bell, ShieldQuestion, UserCheck, LogOut } from 'lucide-react-native';
+import { ArrowLeft, Settings, Bell, ShieldQuestion, UserCheck, LogOut, FileText } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import MenuItem from '../../components/profile/MenuItem';
@@ -25,8 +25,6 @@ export default function MenuScreen({ navigation }) {
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
   const [updateProfileApi, { isLoading: isUpdating }] = useUpdateProfileMutation();
-  
-  // CORRECTION : Extraction de l'état isLoading pour la déconnexion
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
 
   const handleUpdateProfile = async (updatedData) => {
@@ -92,6 +90,16 @@ export default function MenuScreen({ navigation }) {
           </Pressable>
         </View>
 
+        {/* NOUVELLE SECTION : Mes Contributions */}
+        <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>Mes Contributions</Text>
+        <View style={[styles.menuBlock, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <MenuItem 
+            icon={<FileText color={theme.colors.primaryDark} size={20} />} 
+            label="Mes documents publies" 
+            onPress={() => navigation.navigate('MyResources')} 
+          />
+        </View>
+
         <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>Preferences</Text>
         <View style={[styles.menuBlock, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <MenuItem icon={<Settings color={theme.colors.primaryDark} size={20} />} label="Parametres du compte" onPress={() => console.log("Parametres")} />
@@ -126,7 +134,7 @@ export default function MenuScreen({ navigation }) {
         visible={isLogoutModalVisible}
         onClose={() => setIsLogoutModalVisible(false)}
         onConfirm={handleConfirmLogout}
-        isLoading={isLoggingOut} // CONNEXION DU LOADER ICI
+        isLoading={isLoggingOut}
       />
     </View>
   );

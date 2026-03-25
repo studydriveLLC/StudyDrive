@@ -13,6 +13,7 @@ import LoginPage from '../screens/auth/LoginPage';
 import RegisterPage from '../screens/auth/RegisterPage';
 import MainTabNavigator from './MainTabNavigator';
 import MenuScreen from '../screens/profile/MenuScreen';
+import MyResourcesScreen from '../screens/profile/MyResourcesScreen'; // NOUVEL IMPORT
 import ErrorToast from '../components/ui/ErrorToast';
 import SuccessToast from '../components/ui/SuccessToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
@@ -131,6 +132,8 @@ export default function AppNavigator() {
                   cardStyleInterpolator: immersiveFadeInterpolator,
                 }}
               />
+              {/* NOUVELLE ROUTE AJOUTÉE ICI */}
+              <Stack.Screen name="MyResources" component={MyResourcesScreen} />
             </>
           )}
         </Stack.Navigator>
