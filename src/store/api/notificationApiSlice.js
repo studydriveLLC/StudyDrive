@@ -1,5 +1,6 @@
 //src/store/api/notificationApiSlice.js
 import { apiSlice } from '../slices/apiSlice';
+import socketService from '../../services/socketService';
 
 export const notificationApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -19,6 +20,26 @@ export const notificationApiSlice = apiSlice.injectEndpoints({
     getUnreadCount: builder.query({
       query: () => ({ url: '/v1/notifications/unread-count' }),
       providesTags: ['NotificationCount'],
+      async onCacheEntryAdded(arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved }) {
+        try {
+          await cacheDataLoaded;
+          
+          const handleNewNotification = () => {
+            updateCachedData((draft) => {
+              if (draft && draft.data && typeof draft.data.count === 'number') {
+                draft.data.count += 1;
+              }
+            });
+          };
+
+          socketService.on('new_notification', handleNewNotification);
+
+          await cacheEntryRemoved;
+          socketService.off('new_notification', handleNewNotification);
+        } catch {
+          // Si le chargement echoue, on ne plante pas l'application
+        }
+      }
     }),
 
     markAsRead: builder.mutation({

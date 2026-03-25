@@ -1,3 +1,4 @@
+//src/components/navigation/NotificationBell.jsx
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -5,32 +6,17 @@ import { Bell } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useGetUnreadCountQuery } from '../../store/api/notificationApiSlice';
 import { useAppTheme } from '../../theme/theme';
-import socketService from '../../services/socketService';
 
 export default function NotificationBell() {
   const theme = useAppTheme();
   const navigation = useNavigation();
   
-  // Extraction de la fonction refetch fournie par RTK Query
-  const { data: unreadData, refetch } = useGetUnreadCountQuery(undefined, {
+  const { data: unreadData } = useGetUnreadCountQuery(undefined, {
     refetchOnMountOrArgChange: true,
   });
   
   const unreadCount = unreadData?.data?.count || 0;
   const blinkOpacity = useSharedValue(1);
-
-  // AUTONOMIE ABSOLUE : La cloche ecoute directement le socket
-  useEffect(() => {
-    const handleNewNotification = () => {
-      refetch(); // Force l'actualisation silencieuse a la seconde ou le socket s'active
-    };
-
-    socketService.on('new_notification', handleNewNotification);
-
-    return () => {
-      socketService.off('new_notification', handleNewNotification);
-    };
-  }, [refetch]);
 
   useEffect(() => {
     if (unreadCount > 0) {
