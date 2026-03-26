@@ -1,7 +1,7 @@
 //src/components/profile/UserProfileHero.jsx
 import React from 'react';
 import { View, Text, StyleSheet, Image, Pressable, ActivityIndicator, Vibration } from 'react-native';
-import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { interpolate, Extrapolation, useAnimatedStyle } from 'react-native-reanimated';
 import { useSelector } from 'react-redux';
 import { useAppTheme } from '../../theme/theme';
 import RoleBadge from '../ui/RoleBadge';
@@ -32,9 +32,9 @@ export default function UserProfileHero({ profile, scrollY, onAvatarPress, postC
   };
 
   const coverAnimatedStyle = useAnimatedStyle(() => {
-    // Utilisation stricte de la syntaxe 'clamp' moderne
-    const translateY = interpolate(scrollY.value, [-100, 0, 100], [-50, 0, 50], 'clamp');
-    const scale = interpolate(scrollY.value, [-100, 0], [1.5, 1], 'clamp');
+    const sv = scrollY?.value ?? 0;
+    const translateY = interpolate(sv, [-100, 0, 100], [-50, 0, 50], Extrapolation.CLAMP);
+    const scale = interpolate(sv, [-100, 0], [1.5, 1], Extrapolation.CLAMP);
     return { transform: [{ translateY }, { scale }] };
   });
 

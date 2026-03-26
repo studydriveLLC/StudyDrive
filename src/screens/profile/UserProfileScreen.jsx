@@ -1,4 +1,4 @@
-//src/screens/profile/UserProfileScreen.jsx
+// src/screens/profile/UserProfileScreen.jsx
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, RefreshControl, Dimensions, Modal, Image, ActivityIndicator } from 'react-native';
 import Animated, { 
@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedScrollHandler, 
   useAnimatedStyle, 
   interpolate, 
+  Extrapolation, // Assure-toi d'utiliser Extrapolation.CLAMP pour Reanimated v3
   FadeIn
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +14,7 @@ import { ArrowLeft, MoreHorizontal, FileText, LayoutList, AlertTriangle, X } fro
 import { useAppTheme } from '../../theme/theme';
 import { useGetUserProfileQuery } from '../../store/api/userApiSlice';
 import { useGetResourcesQuery } from '../../store/api/resourceApiSlice';
-import { useGetUserPostsQuery } from '../../store/api/postApiSlice'; // IMPORT DU BON HOOK
+import { useGetUserPostsQuery } from '../../store/api/postApiSlice'; 
 
 import UserProfileHero from '../../components/profile/UserProfileHero';
 import UserProfileSkeleton from '../../components/profile/UserProfileSkeleton';
@@ -33,27 +34,44 @@ export default function UserProfileScreen({ route, navigation }) {
   const [activeTab, setActiveTab] = useState('posts'); 
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   
+  // 1. Déclaration de la valeur partagée au niveau racine (Top Level)
   const scrollY = useSharedValue(0);
 
-  const { data: profile, isLoading: isProfileLoading, isFetching: isProfileFetching, refetch: refetchProfile, isError } = useGetUserProfileQuery(userId, { skip: !userId });
+  // 2. Appels des Hooks API (Toujours au niveau racine, pas de try/catch ici)
+  const { 
+    data: profile, 
+    isLoading: isProfileLoading, 
+    isFetching: isProfileFetching, 
+    refetch: refetchProfile, 
+    isError 
+  } = useGetUserProfileQuery(userId, { skip: !userId });
   
-  const { data: resourcesData, isLoading: isResourcesLoading, refetch: refetchResources } = useGetResourcesQuery(
+  const { 
+    data: resourcesData, 
+    isLoading: isResourcesLoading, 
+    refetch: refetchResources 
+  } = useGetResourcesQuery(
     { uploadedBy: userId }, 
     { skip: !userId || activeTab !== 'resources' }
   );
   
-  // UTILISATION DU BON HOOK
-  const { data: postsData, isLoading: isPostsLoading, refetch: refetchPosts } = useGetUserPostsQuery(
+  const { 
+    data: postsData, 
+    isLoading: isPostsLoading, 
+    refetch: refetchPosts 
+  } = useGetUserPostsQuery(
     { userId: userId }, 
     { skip: !userId || activeTab !== 'posts' }
   );
 
+  // 3. Extraction et calcul des données
   const resources = resourcesData || [];
   const posts = postsData || [];
 
   const actualResourceCount = profile?.publicStats?.documents ?? resources.length ?? 0;
   const actualPostCount = profile?.publicStats?.posts ?? posts.length ?? 0;
 
+  // 4. Handlers
   const handleRefresh = async () => {
     refetchProfile();
     if (activeTab === 'posts') refetchPosts();
@@ -64,32 +82,42 @@ export default function UserProfileScreen({ route, navigation }) {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
+  // 5. Handlers d'animation (Blindés contre le undefined)
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => { 
-      scrollY.value = event.contentOffset.y; 
+      if (scrollY && event?.contentOffset) {
+        scrollY.value = event.contentOffset.y; 
+      }
     },
   });
 
   const stickyHeaderStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [120, 160], [0, 1], 'clamp');
-    return { opacity };
+    const sv = scrollY ? scrollY.value : 0;
+    const opacity = interpolate(sv, [120, 160], [0, 1], Extrapolation.CLAMP);
+    return { 
+        opacity,
+        pointerEvents: opacity > 0.5 ? 'auto' : 'none' 
+    };
   });
 
   const backButtonStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [120, 160], [1, 0], 'clamp');
+    const sv = scrollY ? scrollY.value : 0;
+    const opacity = interpolate(sv, [120, 160], [1, 0], Extrapolation.CLAMP);
     return { opacity };
   });
 
   const fabStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [200, 300], [0, 1], 'clamp');
-    const translateY = interpolate(scrollY.value, [200, 300], [20, 0], 'clamp');
+    const sv = scrollY ? scrollY.value : 0;
+    const opacity = interpolate(sv, [200, 300], [0, 1], Extrapolation.CLAMP);
+    const translateY = interpolate(sv, [200, 300], [20, 0], Extrapolation.CLAMP);
     return {
       opacity,
       transform: [{ translateY }],
-      zIndex: scrollY.value > 250 ? 100 : -1,
+      zIndex: sv > 250 ? 100 : -1,
     };
   });
 
+  // 6. Rendu conditionnel des états de chargement/erreur (Après les hooks)
   if (isProfileLoading) return <UserProfileSkeleton />;
 
   if (isError || !profile) {
@@ -105,6 +133,7 @@ export default function UserProfileScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       
+      {/* Modal Image Plein Écran */}
       <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade" onRequestClose={() => setIsAvatarModalVisible(false)}>
         <View style={styles.modalBackground}>
           <Pressable onPress={() => setIsAvatarModalVisible(false)} style={[styles.closeModalButton, { top: insets.top + 20 }]}>
@@ -114,6 +143,7 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
       </Modal>
 
+      {/* Header Sticky (au scroll) */}
       <Animated.View style={[styles.stickyHeader, { paddingTop: insets.top + 10, backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }, stickyHeaderStyle]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.iconButton} hitSlop={15}>
           <ArrowLeft color={theme.colors.text} size={24} />
@@ -126,6 +156,7 @@ export default function UserProfileScreen({ route, navigation }) {
         </Pressable>
       </Animated.View>
 
+      {/* Header Absolu (au repos) */}
       <Animated.View style={[styles.absoluteHeader, { top: insets.top + 10 }, backButtonStyle]}>
         <Pressable onPress={() => navigation.goBack()} style={[styles.blurButton, { backgroundColor: 'rgba(0,0,0,0.4)' }]} hitSlop={15}>
           <ArrowLeft color="#FFF" size={24} />
@@ -150,6 +181,7 @@ export default function UserProfileScreen({ route, navigation }) {
           resourceCount={actualResourceCount}
         />
 
+        {/* Onglets */}
         <View style={[styles.tabContainer, { borderBottomColor: theme.colors.border }]}>
           <Pressable onPress={() => setActiveTab('posts')} style={[styles.tab, activeTab === 'posts' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 3 }]}>
             <Text style={[styles.tabText, { color: activeTab === 'posts' ? theme.colors.primary : theme.colors.textMuted, fontWeight: activeTab === 'posts' ? '800' : '600' }]}>
@@ -163,6 +195,7 @@ export default function UserProfileScreen({ route, navigation }) {
           </Pressable>
         </View>
 
+        {/* Zone de contenu des onglets */}
         <View style={styles.contentArea}>
           {activeTab === 'posts' && (
             isPostsLoading ? (
@@ -210,6 +243,7 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
       </Animated.ScrollView>
 
+      {/* Bouton de retour en haut (FAB) */}
       <Animated.View style={[styles.fabContainer, fabStyle]}>
         <ScrollToTopButton onPress={scrollToTop} />
       </Animated.View>
@@ -220,29 +254,22 @@ export default function UserProfileScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  
   absoluteHeader: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, zIndex: 100 },
   blurButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  
   stickyHeader: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, zIndex: 90 },
   iconButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   stickyName: { fontSize: 18, fontWeight: '800', flex: 1, textAlign: 'center', marginHorizontal: 16 },
-  
   tabContainer: { flexDirection: 'row', borderBottomWidth: 1, paddingHorizontal: 20 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 16 },
   tabText: { fontSize: 15 },
-  
   contentArea: { minHeight: 400, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 60 },
   emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 40, paddingHorizontal: 20 },
   emptyIconWrapper: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 24, elevation: 8, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
   emptyTitle: { fontSize: 20, fontWeight: '800', marginBottom: 12 },
   emptyText: { fontSize: 15, lineHeight: 24, textAlign: 'center' },
-  
   errorText: { fontSize: 22, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
-  
   modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   closeModalButton: { position: 'absolute', right: 20, zIndex: 10, padding: 8 },
   fullScreenImage: { width: '100%', height: '80%' },
-
   fabContainer: { position: 'absolute', bottom: 30, right: 20 },
 });
