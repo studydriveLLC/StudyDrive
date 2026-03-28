@@ -1,4 +1,4 @@
-// src/components/ui/ScrollToTopButton.jsx
+//src/components/ui/ScrollToTopButton.jsx
 import React from 'react';
 import { StyleSheet, Pressable } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
@@ -9,7 +9,16 @@ export default function ScrollToTopButton({ scrollY, onPress }) {
   const theme = useAppTheme();
 
   const animatedStyle = useAnimatedStyle(() => {
-    // Le bouton apparait apres 300 pixels de defilement
+    // PROTECTION STRICTE : Si scrollY n'est pas fourni par le parent, on annule l'animation locale
+    if (!scrollY || scrollY.value === undefined) {
+      return {
+        opacity: 1,
+        transform: [{ translateY: 0 }, { scale: 1 }],
+        pointerEvents: 'auto',
+      };
+    }
+
+    // Si scrollY est fourni, on applique l'animation
     const isVisible = scrollY.value > 300;
     return {
       opacity: withTiming(isVisible ? 1 : 0, { duration: 250, easing: Easing.out(Easing.ease) }),
@@ -17,7 +26,6 @@ export default function ScrollToTopButton({ scrollY, onPress }) {
         { translateY: withTiming(isVisible ? 0 : 20, { duration: 250, easing: Easing.out(Easing.ease) }) },
         { scale: withTiming(isVisible ? 1 : 0.8, { duration: 250 }) }
       ],
-      // Desactive les clics quand le bouton est invisible
       pointerEvents: isVisible ? 'auto' : 'none',
     };
   });

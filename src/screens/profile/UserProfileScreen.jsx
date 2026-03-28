@@ -1,4 +1,4 @@
-// src/screens/profile/UserProfileScreen.jsx
+//src/screens/profile/UserProfileScreen.jsx
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, RefreshControl, Dimensions, Modal, Image, ActivityIndicator } from 'react-native';
 import Animated, { 
@@ -6,7 +6,7 @@ import Animated, {
   useAnimatedScrollHandler, 
   useAnimatedStyle, 
   interpolate, 
-  Extrapolation, // Assure-toi d'utiliser Extrapolation.CLAMP pour Reanimated v3
+  Extrapolation,
   FadeIn
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,10 +34,8 @@ export default function UserProfileScreen({ route, navigation }) {
   const [activeTab, setActiveTab] = useState('posts'); 
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   
-  // 1. Déclaration de la valeur partagée au niveau racine (Top Level)
   const scrollY = useSharedValue(0);
 
-  // 2. Appels des Hooks API (Toujours au niveau racine, pas de try/catch ici)
   const { 
     data: profile, 
     isLoading: isProfileLoading, 
@@ -64,14 +62,12 @@ export default function UserProfileScreen({ route, navigation }) {
     { skip: !userId || activeTab !== 'posts' }
   );
 
-  // 3. Extraction et calcul des données
   const resources = resourcesData || [];
   const posts = postsData || [];
 
   const actualResourceCount = profile?.publicStats?.documents ?? resources.length ?? 0;
   const actualPostCount = profile?.publicStats?.posts ?? posts.length ?? 0;
 
-  // 4. Handlers
   const handleRefresh = async () => {
     refetchProfile();
     if (activeTab === 'posts') refetchPosts();
@@ -82,10 +78,10 @@ export default function UserProfileScreen({ route, navigation }) {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  // 5. Handlers d'animation (Blindés contre le undefined)
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => { 
-      if (scrollY && event?.contentOffset) {
+      // FIX STRICT: Remplacement de event?.contentOffset par une evaluation stricte
+      if (scrollY && event && event.contentOffset) {
         scrollY.value = event.contentOffset.y; 
       }
     },
@@ -117,7 +113,6 @@ export default function UserProfileScreen({ route, navigation }) {
     };
   });
 
-  // 6. Rendu conditionnel des états de chargement/erreur (Après les hooks)
   if (isProfileLoading) return <UserProfileSkeleton />;
 
   if (isError || !profile) {
@@ -133,7 +128,6 @@ export default function UserProfileScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       
-      {/* Modal Image Plein Écran */}
       <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade" onRequestClose={() => setIsAvatarModalVisible(false)}>
         <View style={styles.modalBackground}>
           <Pressable onPress={() => setIsAvatarModalVisible(false)} style={[styles.closeModalButton, { top: insets.top + 20 }]}>
@@ -143,7 +137,6 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* Header Sticky (au scroll) */}
       <Animated.View style={[styles.stickyHeader, { paddingTop: insets.top + 10, backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }, stickyHeaderStyle]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.iconButton} hitSlop={15}>
           <ArrowLeft color={theme.colors.text} size={24} />
@@ -156,7 +149,6 @@ export default function UserProfileScreen({ route, navigation }) {
         </Pressable>
       </Animated.View>
 
-      {/* Header Absolu (au repos) */}
       <Animated.View style={[styles.absoluteHeader, { top: insets.top + 10 }, backButtonStyle]}>
         <Pressable onPress={() => navigation.goBack()} style={[styles.blurButton, { backgroundColor: 'rgba(0,0,0,0.4)' }]} hitSlop={15}>
           <ArrowLeft color="#FFF" size={24} />
@@ -181,7 +173,6 @@ export default function UserProfileScreen({ route, navigation }) {
           resourceCount={actualResourceCount}
         />
 
-        {/* Onglets */}
         <View style={[styles.tabContainer, { borderBottomColor: theme.colors.border }]}>
           <Pressable onPress={() => setActiveTab('posts')} style={[styles.tab, activeTab === 'posts' && { borderBottomColor: theme.colors.primary, borderBottomWidth: 3 }]}>
             <Text style={[styles.tabText, { color: activeTab === 'posts' ? theme.colors.primary : theme.colors.textMuted, fontWeight: activeTab === 'posts' ? '800' : '600' }]}>
@@ -195,7 +186,6 @@ export default function UserProfileScreen({ route, navigation }) {
           </Pressable>
         </View>
 
-        {/* Zone de contenu des onglets */}
         <View style={styles.contentArea}>
           {activeTab === 'posts' && (
             isPostsLoading ? (
@@ -243,7 +233,6 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
       </Animated.ScrollView>
 
-      {/* Bouton de retour en haut (FAB) */}
       <Animated.View style={[styles.fabContainer, fabStyle]}>
         <ScrollToTopButton onPress={scrollToTop} />
       </Animated.View>

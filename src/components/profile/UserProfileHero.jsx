@@ -32,7 +32,8 @@ export default function UserProfileHero({ profile, scrollY, onAvatarPress, postC
   };
 
   const coverAnimatedStyle = useAnimatedStyle(() => {
-    const sv = scrollY?.value ?? 0;
+    // FIX STRICT: Remplacement du chainage optionnel par une evaluation stricte pour le worklet
+    const sv = (scrollY && scrollY.value !== undefined) ? scrollY.value : 0;
     const translateY = interpolate(sv, [-100, 0, 100], [-50, 0, 50], Extrapolation.CLAMP);
     const scale = interpolate(sv, [-100, 0], [1.5, 1], Extrapolation.CLAMP);
     return { transform: [{ translateY }, { scale }] };
