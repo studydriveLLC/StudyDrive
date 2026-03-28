@@ -1,8 +1,7 @@
-//src/store/api/postApiSlice.js
 import { apiSlice } from '../slices/apiSlice';
 
 export const postApiSlice = apiSlice
-  .enhanceEndpoints({ addTagTypes: ['UserPosts'] })
+  .enhanceEndpoints({ addTagTypes: ['UserPosts', 'Post'] })
   .injectEndpoints({
     endpoints: (builder) => ({
       getFeed: builder.query({
@@ -50,12 +49,51 @@ export const postApiSlice = apiSlice
         invalidatesTags: ['Post', 'UserPosts'],
       }),
 
+      // NOUVEAU : Câblage du Repost
+      createRepost: builder.mutation({
+        query: (postId) => ({
+          url: `/v1/social/posts/${postId}/repost`,
+          method: 'POST',
+        }),
+        async onQueryStarted(postId, { dispatch, queryFulfilled }) {
+          try {
+            const { data } = await queryFulfilled;
+            dispatch(
+              postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+                if (data && data.data && data.data.post) {
+                  draft.unshift(data.data.post);
+                }
+                const originalPost = draft.find((p) => p._id === postId);
+                if(originalPost) {
+                  originalPost.stats.shares += 1;
+                }
+              })
+            );
+          } catch (error) {
+            console.log('Erreur silencieuse creation repost:', error);
+          }
+        },
+        invalidatesTags: ['Post', 'UserPosts'],
+      }),
+
       deletePost: builder.mutation({
         query: (postId) => ({
           url: `/v1/social/posts/${postId}`,
           method: 'DELETE',
         }),
-        invalidatesTags: ['Post', 'UserPosts'],
+        async onQueryStarted(postId, { dispatch, queryFulfilled }) {
+          const patchResult = dispatch(
+            postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+              return draft.filter((post) => post._id !== postId);
+            })
+          );
+          try {
+            await queryFulfilled;
+          } catch {
+            patchResult.undo();
+          }
+        },
+        invalidatesTags: ['UserPosts'],
       }),
 
       toggleLike: builder.mutation({
@@ -87,23 +125,42 @@ export const postApiSlice = apiSlice
           method: 'POST',
           body: { text },
         }),
-        async onQueryStarted({ postId }, { dispatch, queryFulfilled }) {
+        invalidatesTags: ['Post', 'UserPosts'],
+      }),
+
+      // NOUVEAU : Modifier un commentaire
+      updateComment: builder.mutation({
+        query: ({ postId, commentId, text }) => ({
+          url: `/v1/social/posts/${postId}/comments/${commentId}`,
+          method: 'PUT',
+          body: { text },
+        }),
+        invalidatesTags: ['Post', 'UserPosts'],
+      }),
+
+      // NOUVEAU : Supprimer un commentaire avec Optimistic UI
+      deleteComment: builder.mutation({
+        query: ({ postId, commentId }) => ({
+          url: `/v1/social/posts/${postId}/comments/${commentId}`,
+          method: 'DELETE',
+        }),
+        async onQueryStarted({ postId, commentId }, { dispatch, queryFulfilled }) {
+          const patchResult = dispatch(
+            postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+              const post = draft.find((p) => p._id === postId);
+              if (post) {
+                post.comments = post.comments.filter((c) => c._id !== commentId);
+                post.stats.comments = Math.max(0, post.stats.comments - 1);
+              }
+            })
+          );
           try {
-            const { data } = await queryFulfilled;
-            dispatch(
-              postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
-                const post = draft.find((p) => p._id === postId);
-                if (post) {
-                  post.comments.push(data.data.comment);
-                  post.stats.comments += 1;
-                }
-              })
-            );
-          } catch (error) {
-            console.log('Erreur silencieuse ajout commentaire:', error);
+            await queryFulfilled;
+          } catch {
+            patchResult.undo();
           }
         },
-        invalidatesTags: ['Post', 'UserPosts'],
+        invalidatesTags: ['UserPosts'],
       }),
     }),
     overrideExisting: true,
@@ -113,7 +170,10 @@ export const {
   useGetFeedQuery,
   useGetUserPostsQuery,
   useCreatePostMutation,
+  useCreateRepostMutation,
   useDeletePostMutation,
   useToggleLikeMutation,
   useAddCommentMutation,
+  useUpdateCommentMutation,
+  useDeleteCommentMutation,
 } = postApiSlice;

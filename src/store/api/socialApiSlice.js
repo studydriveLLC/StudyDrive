@@ -1,5 +1,5 @@
-//src/store/api/socialApiSlice.js
 import { apiSlice } from '../slices/apiSlice';
+import { postApiSlice } from './postApiSlice';
 
 export const socialApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -92,6 +92,27 @@ export const socialApiSlice = apiSlice.injectEndpoints({
         }
       },
     }),
+
+    // NOUVEAU : Masquer un utilisateur ("Ne plus voir")
+    hideUser: builder.mutation({
+      query: (targetId) => ({
+        url: `/v1/social/hide/${targetId}`,
+        method: 'POST',
+      }),
+      async onQueryStarted(targetId, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          postApiSlice.util.updateQueryData('getFeed', undefined, (draft) => {
+            return draft.filter((post) => post.author._id !== targetId);
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+      invalidatesTags: ['Post'],
+    }),
   }),
   overrideExisting: true,
 });
@@ -101,4 +122,5 @@ export const {
   useGetMyFollowStatsQuery,
   useFollowUserMutation,
   useUnfollowUserMutation,
+  useHideUserMutation,
 } = socialApiSlice;
