@@ -1,9 +1,12 @@
 // src/store/slices/apiSlice.js
+// PASSERELLE RESEAU - Auto-Retry & Anti-Deadlock integres
+// CSCSM Level: Bank Grade
+
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { Mutex } from 'async-mutex';
 import { Platform } from 'react-native';
-import { getToken } from '../secureStoreAdapter';
-import { setCredentials, performLogout, setTokenRefreshing } from './authSlice';
+import SecureStorageAdapter from '../secureStoreAdapter';
+import { logout, setCredentials } from './authSlice';
 
 const mutex = new Mutex();
 const rawBaseUrl = process.env.EXPO_PUBLIC_API_URL || '';
@@ -21,7 +24,7 @@ const baseQuery = fetchBaseQuery({
     let token = getState().auth?.token;
 
     if (!token) {
-      token = await getToken('accessToken');
+      token = await SecureStorageAdapter.getItem('token');
     }
 
     if (token) {
@@ -45,12 +48,12 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
   const tokenBeforeRequest = api.getState().auth?.token;
   let requestUrl = typeof args === 'string' ? args : args?.url || '';
   
-  // Enregistrement du temps de depart pour detecter la suspension du thread (Fast Refresh Expo)
+  // Enregistrement du temps de depart pour detecter la mise en veille de l'appareil
   const startTime = Date.now();
   let result = await baseQuery(args, api, extraOptions);
   const duration = Date.now() - startTime;
 
-  // Logique de detection Bank Grade (comme dans Yely)
+  // Logique de detection de veille / deconnexion Bank Grade (Yely)
   const wasSuspended = duration > 25000;
   const isBrowserHidden = Platform.OS === 'web' && typeof document !== 'undefined' && document.visibilityState === 'hidden';
   const isBrowserOffline = Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -62,7 +65,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
 
   const isAuthEndpoint = requestUrl.includes('/login') || requestUrl.includes('/register') || requestUrl.includes('/refresh') || requestUrl.includes('/updateMyPassword');
 
-  // Retry uniquement pour les vraies coupures, pas pour les rechargements Expo
+  // Retry silencieux uniquement pour les micro-coupures reseau transitoires
   if (!isSleepingOrOffline && !isAuthEndpoint && result.error && (result.error.status === 'FETCH_ERROR' || result.error.status === 'TIMEOUT_ERROR')) {
     console.warn(`[API] Micro-coupure reseau detectee sur ${requestUrl}. Retry silencieux...`);
     await sleep(1500);
@@ -70,13 +73,13 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
   }
 
   if (result.error && result.error.status === 401 && !isAuthEndpoint) {
-    // PROTECTION ANTI-DEADLOCK (Boucle de verification d'etat)
-    if (mutex.isLocked() || api.getState().auth?.isTokenRefreshing) {
+    // PROTECTION ANTI-DEADLOCK (Mutex de rafraichissement concurrent)
+    if (mutex.isLocked() || api.getState().auth?.isRefreshing) {
       if (mutex.isLocked()) {
         await mutex.waitForUnlock();
       } else {
         let loopCount = 0;
-        while (api.getState().auth?.isTokenRefreshing && loopCount < 150) { 
+        while (api.getState().auth?.isRefreshing && loopCount < 150) { 
           await sleep(100);
           loopCount++;
         }
@@ -96,57 +99,80 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
           return await baseQuery(args, api, extraOptions);
         }
 
-        api.dispatch(setTokenRefreshing(true));
-
         let currentRefreshToken = api.getState().auth?.refreshToken;
         if (!currentRefreshToken) {
-           currentRefreshToken = await getToken('refreshToken');
+           currentRefreshToken = await SecureStorageAdapter.getItem('refreshToken');
+           if (!currentRefreshToken) {
+             await sleep(500);
+             currentRefreshToken = await SecureStorageAdapter.getItem('refreshToken');
+           }
         }
 
         if (!currentRefreshToken) {
             console.warn("[API] Aucun refresh token. Deconnexion automatique forcee.");
-            api.dispatch(performLogout());
+            socketService.disconnect();
+            api.dispatch(logout({ reason: 'MISSING_REFRESH_TOKEN_API_SLICE' }));
             return result;
         }
 
-        const refreshResult = await baseQuery(
-          { 
-            url: '/v1/auth/refresh', 
-            method: 'POST',
-            body: { refreshToken: currentRefreshToken } 
-          },
-          api,
-          extraOptions
-        );
+        const cleanBaseUrl = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout strict de 15s
 
-        if (refreshResult.data?.status === 'success') {
-          const newToken = refreshResult.data.data.accessToken;
-          const newRefreshToken = refreshResult.data.data.refreshToken || currentRefreshToken;
+        // Fetch manuel hors baseQuery pour eviter l'injection automatique de l'ancien token Authorization expire
+        const refreshResponse = await fetch(`${cleanBaseUrl}/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ 
+            refreshToken: currentRefreshToken,
+            clientPlatform: Platform.OS
+          }),
+          credentials: 'omit',
+          signal: controller.signal
+        });
 
-          api.dispatch(setCredentials({ 
-            token: newToken, 
-            refreshToken: newRefreshToken 
-          }));
-          
-          try {
+        clearTimeout(timeoutId);
+        const refreshData = await refreshResponse.json().catch(() => null);
+
+        if (refreshResponse.ok && refreshData) {
+          const payload = refreshData.data || refreshData;
+          const newToken = payload?.accessToken || payload?.token;
+          const newRefreshToken = payload?.refreshToken || currentRefreshToken;
+
+          if (newToken) {
+            try {
+              const socketService = require('../../services/socketService').default;
+              socketService.updateToken(newToken);
+            } catch (e) {}
+
+            api.dispatch(setCredentials({ 
+              token: newToken, 
+              refreshToken: newRefreshToken,
+              user: payload?.user || api.getState().auth?.user
+            }));
+
+            result = await baseQuery(args, api, extraOptions);
+          } else {
             const socketService = require('../../services/socketService').default;
-            socketService.updateToken(newToken);
-          } catch (e) {}
-
-          result = await baseQuery(args, api, extraOptions);
-        } else if (refreshResult.error && refreshResult.error.status !== 'FETCH_ERROR' && refreshResult.error.status !== 'TIMEOUT_ERROR') {
-          api.dispatch(performLogout());
+            socketService.disconnect();
+            api.dispatch(logout({ reason: 'MALFORMED_REFRESH_PAYLOAD' }));
+          }
+        } else if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+          const socketService = require('../../services/socketService').default;
+          socketService.disconnect();
+          api.dispatch(logout({ reason: 'REFRESH_REJECTED_401' }));
         }
+      } catch (error) {
+        console.error('[API] Echec du fetch de rafraichissement. Mutex libere.', error);
       } finally {
-        api.dispatch(setTokenRefreshing(false));
         release();
       }
     }
   }
 
-  // Masquer silencieusement l'erreur au lieu de la renvoyer aux composants si c'etait une suspension
+  // Masquer silencieusement les erreurs transitoires liees a la mise en veille ou hors ligne
   if (isSleepingOrOffline && result.error && (result.error.status === 'FETCH_ERROR' || result.error.status === 'TIMEOUT_ERROR')) {
-    console.info(`[API] Erreur transitoire masquee (Suspension du thread ou Fast Refresh detecte)`);
+    console.info(`[API] Erreur transitoire masquee (Suspension du thread ou hors ligne detecte)`);
   }
 
   return result;
@@ -156,5 +182,6 @@ export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
   refetchOnMountOrArgChange: true,
-tagTypes: ['User', 'Post', 'Workspace', 'Notification', 'Resource', 'NotificationCount', 'FollowStatus', 'FollowStats'],  endpoints: () => ({}),
+  tagTypes: ['User', 'Post', 'Workspace', 'Notification', 'Resource', 'NotificationCount', 'FollowStatus', 'FollowStats'],
+  endpoints: () => ({}),
 });

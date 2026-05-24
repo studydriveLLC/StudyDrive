@@ -4,7 +4,7 @@ import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/
 import { useSelector, useDispatch } from 'react-redux';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { getToken } from '../store/secureStoreAdapter';
+import SecureStorageAdapter from '../store/secureStoreAdapter';
 
 import { restoreAuth, forceSilentRefresh, setAuthLoading } from '../store/slices/authSlice';
 import { apiSlice } from '../store/slices/apiSlice';
@@ -19,7 +19,7 @@ import MenuScreen from '../screens/profile/MenuScreen';
 import MyResourcesScreen from '../screens/profile/MyResourcesScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen'; 
 import ResourceDetailScreen from '../screens/ressources/ResourceDetailScreen';
-import UserProfileScreen from '../screens/profile/UserProfileScreen'; // NOUVEL IMPORT ICI
+import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import ErrorToast from '../components/ui/ErrorToast';
 import SuccessToast from '../components/ui/SuccessToast';
 import TopInsetBox from '../components/ui/TopInsetBox';
@@ -30,6 +30,7 @@ import socketService from '../services/socketService';
 const Stack = createStackNavigator();
 
 const fastSpringConfig = {
+  cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
   animation: 'spring',
   config: { stiffness: 250, damping: 20, mass: 1, overshootClamping: true, restDisplacementThreshold: 0.01, restSpeedThreshold: 0.01 },
 };
@@ -53,22 +54,23 @@ export default function AppNavigator() {
   useEffect(() => {
     const bootSequence = async () => {
       try {
-        const token = await getToken('accessToken');
-        const userDataStr = await getToken('userData');
-        const refreshToken = await getToken('refreshToken');
+        const token = await SecureStorageAdapter.getItem('token');
+        const userDataStr = await SecureStorageAdapter.getItem('userInfo');
+        const refreshToken = await SecureStorageAdapter.getItem('refreshToken');
+        const tokenAcquiredAt = await SecureStorageAdapter.getItem('tokenAcquiredAt');
 
         if (token && userDataStr) {
           let savedUser = null;
           try { savedUser = JSON.parse(userDataStr); } catch (parseError) {}
           
-          dispatch(restoreAuth({ user: savedUser, token, refreshToken }));
+          dispatch(restoreAuth({ user: savedUser, token, refreshToken, tokenAcquiredAt }));
           socketService.connect(token);
           dispatch(forceSilentRefresh());
         } else {
-          dispatch(restoreAuth({ user: null, token: null, refreshToken: null }));
+          dispatch(restoreAuth({ user: null, token: null, refreshToken: null, tokenAcquiredAt: null }));
         }
       } catch (error) {
-        dispatch(restoreAuth({ user: null, token: null, refreshToken: null }));
+        dispatch(restoreAuth({ user: null, token: null, refreshToken: null, tokenAcquiredAt: null }));
       } finally {
         dispatch(setAuthLoading(false));
       }
@@ -135,10 +137,7 @@ export default function AppNavigator() {
           ) : (
             <>
               <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-              
-              {/* VRAI PROFIL INTEGRÉ ICI */}
               <Stack.Screen name="Profile" component={UserProfileScreen} />
-              
               <Stack.Screen name="ResourceDetail" component={ResourceDetailScreen} />
               <Stack.Screen
                 name="Menu"

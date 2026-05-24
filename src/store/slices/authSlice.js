@@ -14,6 +14,7 @@ const initialState = {
   tokenAcquiredAt: null, 
   isAuthenticated: false,
   isRefreshing: false, 
+  isLoading: true, // Initialise a true pour retenir l'UI pendant le bootSequence
   subscriptionStatus: {
     isActive: false,
     isPending: false,
@@ -66,6 +67,7 @@ const authSlice = createSlice({
       if (finalToken) {
         state.token = finalToken;
         state.tokenAcquiredAt = Date.now(); 
+        safeStorageSet('tokenAcquiredAt', String(state.tokenAcquiredAt));
       }
       
       if (refreshToken) state.refreshToken = refreshToken;
@@ -104,7 +106,7 @@ const authSlice = createSlice({
     updatePromoMode: (state, action) => {
       state.promoMode = {
         isActive: action.payload.isGlobalFreeAccess || false,
-        message: action.payload.promoMessage || "Yely Regal ! Mode VIP Active."
+        message: action.payload.promoMessage || "VIP Active."
       };
     },
 
@@ -123,15 +125,16 @@ const authSlice = createSlice({
       safeStorageRemove('userInfo');
       safeStorageRemove('token');
       safeStorageRemove('refreshToken');
+      safeStorageRemove('tokenAcquiredAt');
     },
 
     restoreAuth: (state, action) => {
-      const { user, token, refreshToken } = action.payload || {};
+      const { user, token, refreshToken, tokenAcquiredAt } = action.payload || {};
       state.user = user || null;
       state.token = token;
       state.refreshToken = refreshToken;
       
-      state.tokenAcquiredAt = 0; 
+      state.tokenAcquiredAt = tokenAcquiredAt ? Number(tokenAcquiredAt) : 0; 
       state.isAuthenticated = !!token;
       
       if (user && user.subscription && typeof user.subscription === 'object') {
@@ -146,6 +149,10 @@ const authSlice = createSlice({
 
     setRefreshing: (state, action) => {
       state.isRefreshing = action.payload;
+    },
+
+    setAuthLoading: (state, action) => {
+      state.isLoading = action.payload;
     }
   },
 });
@@ -157,7 +164,8 @@ export const {
   updatePromoMode,
   logout, 
   restoreAuth, 
-  setRefreshing 
+  setRefreshing,
+  setAuthLoading
 } = authSlice.actions;
 
 export const fetchPromoConfig = () => async (dispatch, getState) => {
@@ -186,10 +194,13 @@ export const fetchPromoConfig = () => async (dispatch, getState) => {
   return null;
 };
 
+// ANTI-RACE CONDITION MODULE VARIABLE
+let isSilentRefreshing = false;
+
 export const forceSilentRefresh = () => async (dispatch, getState) => {
   const { auth } = getState();
 
-  if (auth.isRefreshing) return;
+  if (isSilentRefreshing) return;
 
   if (auth.token && auth.tokenAcquiredAt) {
     const ageInMs = Date.now() - auth.tokenAcquiredAt;
@@ -198,7 +209,7 @@ export const forceSilentRefresh = () => async (dispatch, getState) => {
     }
   }
 
-  dispatch(setRefreshing(true)); 
+  isSilentRefreshing = true;
 
   try {
     let currentRefreshToken = auth.refreshToken;
@@ -207,7 +218,6 @@ export const forceSilentRefresh = () => async (dispatch, getState) => {
     }
 
     if (!currentRefreshToken) {
-      dispatch(setRefreshing(false));
       return;
     }
 
@@ -215,7 +225,7 @@ export const forceSilentRefresh = () => async (dispatch, getState) => {
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // Alignement 15s (comme Yely)
 
     const response = await fetch(`${cleanBaseUrl}/v1/auth/refresh`, {
       method: 'POST',
@@ -258,7 +268,7 @@ export const forceSilentRefresh = () => async (dispatch, getState) => {
   } catch (error) {
     console.error("[AUTH] Echec reseau du rafraichissement force. Session conservee:", error);
   } finally {
-    dispatch(setRefreshing(false)); 
+    isSilentRefreshing = false;
   }
 };
 

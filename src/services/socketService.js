@@ -27,7 +27,7 @@ class SocketService {
     
     if (!token) {
       const { getToken } = require('../store/secureStoreAdapter');
-      token = await getToken('accessToken');
+      token = await getToken('token');
     }
 
     if (!token || !SOCKET_URL) return null;
